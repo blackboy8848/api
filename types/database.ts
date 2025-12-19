@@ -3,6 +3,7 @@
 export interface User {
   uid: string;
   email: string;
+  password: string;
   display_name?: string;
   phone?: string;
   location?: string;
