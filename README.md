@@ -7,6 +7,7 @@ A comprehensive REST API built with Next.js for managing a travel/tour booking d
 - ✅ Full CRUD operations (Create, Read, Update, Delete) for all 10 database tables
 - ✅ TypeScript support
 - ✅ MySQL connection pooling
+- ✅ AWS S3 file storage integration
 - ✅ Error handling
 - ✅ RESTful API design
 
@@ -24,13 +25,20 @@ A comprehensive REST API built with Next.js for managing a travel/tour booking d
    cp .env.example .env.local
    ```
    
-   Update the database credentials in `.env.local`:
+   Update the database and AWS credentials in `.env.local`:
    ```env
+   # Database Configuration
    DB_HOST=localhost
    DB_PORT=3306
    DB_USER=u690251984_yashop8848
    DB_PASSWORD=Yashop8848
    DB_NAME=u690251984_yashop8848
+   
+   # AWS S3 Configuration
+   AWS_REGION=ap-south-1
+   AWS_ACCESS_KEY_ID=your_aws_access_key_id
+   AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
+   AWS_S3_BUCKET_NAME=mmbcommunity
    ```
    
    **Note:** If you're using a remote database (like Hostinger), update `DB_HOST` to your database hostname.
@@ -93,6 +101,7 @@ curl -X POST http://localhost:3000/api/tours \
 - `/api/bookings` - Tour bookings
 - `/api/events` - Events
 - `/api/blog-posts` - Blog posts
+- `/api/upload` - File upload to AWS S3
 
 Each endpoint supports GET (list/single), POST (create), PUT (update), and DELETE operations.
 
@@ -119,7 +128,8 @@ Each endpoint supports GET (list/single), POST (create), PUT (update), and DELET
 │       ├── tour-reviews/
 │       └── ...
 ├── lib/
-│   └── db.ts         # Database connection
+│   ├── db.ts         # Database connection
+│   └── s3.ts         # AWS S3 storage utilities
 ├── types/
 │   └── database.ts   # TypeScript types
 └── .env.local        # Environment variables (create this)
@@ -130,4 +140,31 @@ Each endpoint supports GET (list/single), POST (create), PUT (update), and DELET
 - Next.js 16
 - TypeScript
 - MySQL2
+- AWS SDK (S3)
 - Node.js
+
+## File Upload
+
+The API includes an upload endpoint for storing files in AWS S3:
+
+### Upload a File
+```bash
+curl -X POST http://localhost:3000/api/upload \
+  -F "file=@/path/to/image.jpg" \
+  -F "folder=tours"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "url": "https://mmbcommunity.s3.ap-south-1.amazonaws.com/tours/uuid.jpg",
+  "key": "tours/uuid.jpg",
+  "fileName": "image.jpg",
+  "size": 12345,
+  "type": "image/jpeg"
+}
+```
+
+**Supported file types:** JPEG, JPG, PNG, GIF, WebP  
+**Max file size:** 10MB

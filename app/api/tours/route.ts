@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { Tour } from '@/types/database';
 
+// Helper function to parse JSON fields from database
+function parseTourJsonFields(tour: any): any {
+  const parsed = { ...tour };
+
+  // Parse JSON fields that are stored as strings in the database
+  const jsonFields = ['images', 'startDates', 'included', 'notIncluded', 'schedule'];
+  
+  jsonFields.forEach(field => {
+    if (parsed[field] && typeof parsed[field] === 'string') {
+      try {
+        parsed[field] = JSON.parse(parsed[field]);
+      } catch (e) {
+        parsed[field] = null;
+      }
+    }
+  });
+
+  return parsed;
+}
+
 // GET all tours or single tour by id
 export async function GET(request: NextRequest) {
   try {
@@ -23,7 +43,8 @@ export async function GET(request: NextRequest) {
       if (Array.isArray(tours) && tours.length === 0) {
         return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
       }
-      return NextResponse.json(tours[0]);
+      const tour = parseTourJsonFields(tours[0]);
+      return NextResponse.json(tour);
     }
 
     // Build query for filters
@@ -45,7 +66,10 @@ export async function GET(request: NextRequest) {
     const [rows] = await db.execute(query, params);
     const tours = rows as Tour[];
     db.release();
-    return NextResponse.json(tours);
+    
+    // Parse JSON fields for all tours
+    const parsedTours = tours.map(tour => parseTourJsonFields(tour));
+    return NextResponse.json(parsedTours);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

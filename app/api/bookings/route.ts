@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { Booking } from '@/types/database';
+import { randomUUID } from 'crypto';
 
 // GET all bookings or filtered by user_id, tour_id, or status
 export async function GET(request: NextRequest) {
@@ -11,12 +12,16 @@ export async function GET(request: NextRequest) {
     const tour_id = searchParams.get('tour_id');
     const booking_status = searchParams.get('booking_status');
     const payment_status = searchParams.get('payment_status');
+    const status = searchParams.get('status'); // Alternative status field
+
+    const db = await pool.getConnection();
 
     if (id) {
-      const [rows] = await pool.execute(
+      const [rows] = await db.execute(
         'SELECT * FROM bookings WHERE id = ?',
         [id]
       );
+      db.release();
       const bookings = rows as Booking[];
       if (Array.isArray(bookings) && bookings.length === 0) {
         return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
@@ -37,9 +42,9 @@ export async function GET(request: NextRequest) {
       params.push(tour_id);
     }
 
-    if (booking_status) {
-      query += ' AND booking_status = ?';
-      params.push(booking_status);
+    if (status) {
+      query += ' AND status = ?';
+      params.push(status);
     }
 
     if (payment_status) {
@@ -47,45 +52,121 @@ export async function GET(request: NextRequest) {
       params.push(payment_status);
     }
 
-    query += ' ORDER BY booking_date DESC';
+    query += ' ORDER BY booking_date DESC, created_at DESC';
 
-    const [rows] = await pool.execute(query, params);
+    const [rows] = await db.execute(query, params);
     const bookings = rows as Booking[];
+    db.release();
     return NextResponse.json(bookings);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// POST - Create new booking
+// POST - Create new booking with availability check and transaction
 export async function POST(request: NextRequest) {
+  const db = await pool.getConnection();
+  
   try {
+    await db.beginTransaction();
+    
     const body: Booking = await request.json();
-    const { id, user_id, tour_id, tour_name, customer_name, customer_email, phone_number, travel_date } = body;
+    const { 
+      id, user_id, tour_id, slot_id, variant_id, seats,
+      tour_name, customer_name, customer_email, phone_number, travel_date, total_amount 
+    } = body;
 
-    if (!id || !user_id || !tour_id || !tour_name || !customer_name || !customer_email || !phone_number || !travel_date) {
+    // Validate required fields
+    if (!user_id || !tour_id || !slot_id || !variant_id || !seats) {
+      await db.rollback();
+      db.release();
       return NextResponse.json(
-        { error: 'id, user_id, tour_id, tour_name, customer_name, customer_email, phone_number, and travel_date are required' },
+        { error: 'user_id, tour_id, slot_id, variant_id, and seats are required' },
         { status: 400 }
       );
     }
 
-    const [result] = await pool.execute(
-      `INSERT INTO bookings (id, user_id, tour_id, tour_name, customer_name, customer_email, phone_number, 
-        number_of_seats, payment_type, payment_proof, payment_status, booking_status, travel_date, 
-        total_amount, payment_method_id, ticket_id, notes) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    if (seats <= 0) {
+      await db.rollback();
+      db.release();
+      return NextResponse.json(
+        { error: 'seats must be greater than 0' },
+        { status: 400 }
+      );
+    }
+
+    // Lock variant row for update to prevent race conditions
+    const [variantRows] = await db.execute(
+      'SELECT capacity FROM tour_slot_variants WHERE id = ? FOR UPDATE',
+      [variant_id]
+    );
+    const variants = variantRows as any[];
+    
+    if (Array.isArray(variants) && variants.length === 0) {
+      await db.rollback();
+      db.release();
+      return NextResponse.json({ error: 'Variant not found' }, { status: 404 });
+    }
+
+    const variant = variants[0];
+
+    // Check availability
+    const [availabilityRows] = await db.execute(
+      `SELECT 
+        v.capacity - IFNULL(SUM(b.seats), 0) AS available_seats
+       FROM tour_slot_variants v
+       LEFT JOIN bookings b
+         ON v.id = b.variant_id
+         AND b.status IN ('confirmed', 'completed')
+       WHERE v.id = ?
+       GROUP BY v.id`,
+      [variant_id]
+    );
+    
+    const availability = availabilityRows as any[];
+    const availableSeats = availability[0]?.available_seats ?? variant.capacity;
+
+    if (availableSeats < seats) {
+      await db.rollback();
+      db.release();
+      return NextResponse.json(
+        { 
+          error: 'Not enough available seats',
+          available_seats: availableSeats,
+          requested_seats: seats
+        },
+        { status: 400 }
+      );
+    }
+
+    // Generate UUID if not provided
+    const bookingId = id || randomUUID();
+
+    // Create booking
+    await db.execute(
+      `INSERT INTO bookings (
+        id, user_id, tour_id, slot_id, variant_id, seats,
+        tour_name, customer_name, customer_email, phone_number, 
+        travel_date, total_amount, status, payment_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?)`,
       [
-        id, user_id, tour_id, tour_name, customer_name, customer_email, phone_number,
-        body.number_of_seats || 1, body.payment_type || 'Full', body.payment_proof || null,
-        body.payment_status || 'Not Verified', body.booking_status || 'Pending',
-        travel_date, body.total_amount || 0, body.payment_method_id || null,
-        body.ticket_id || null, body.notes || null
+        bookingId, user_id, tour_id, slot_id, variant_id, seats,
+        tour_name || null, customer_name || null, customer_email || null, 
+        phone_number || null, travel_date || null, total_amount || 0,
+        body.payment_status || 'Not Verified'
       ]
     );
 
-    return NextResponse.json({ message: 'Booking created successfully', id }, { status: 201 });
+    await db.commit();
+    db.release();
+
+    return NextResponse.json({ 
+      message: 'Booking created successfully', 
+      id: bookingId 
+    }, { status: 201 });
   } catch (error: any) {
+    await db.rollback();
+    db.release();
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -108,12 +189,45 @@ export async function PUT(request: NextRequest) {
     const setClause = fields.map(field => `${field} = ?`).join(', ');
     const values = fields.map(field => (updateFields as any)[field]);
 
-    const [result] = await pool.execute(
+    const db = await pool.getConnection();
+    const [result] = await db.execute(
       `UPDATE bookings SET ${setClause} WHERE id = ?`,
       [...values, id]
     );
+    db.release();
 
     return NextResponse.json({ message: 'Booking updated successfully', id });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// PATCH - Cancel booking (releases seats)
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+
+    const db = await pool.getConnection();
+    
+    // Update booking status to cancelled
+    // Seats are automatically freed because availability only counts confirmed/completed bookings
+    const [result] = await db.execute(
+      `UPDATE bookings SET status = 'cancelled' WHERE id = ?`,
+      [id]
+    );
+    db.release();
+
+    const updateResult = result as any;
+    if (updateResult.affectedRows === 0) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ message: 'Booking cancelled successfully', id });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -129,7 +243,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    const [result] = await pool.execute('DELETE FROM bookings WHERE id = ?', [id]);
+    const db = await pool.getConnection();
+    const [result] = await db.execute('DELETE FROM bookings WHERE id = ?', [id]);
+    db.release();
 
     return NextResponse.json({ message: 'Booking deleted successfully' });
   } catch (error: any) {
