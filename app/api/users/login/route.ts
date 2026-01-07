@@ -68,6 +68,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if password is hashed (bcrypt hashes start with $2a$, $2b$, or $2y$)
+    const isHashed = user.password.startsWith('$2a$') || 
+                     user.password.startsWith('$2b$') || 
+                     user.password.startsWith('$2y$');
+
+    if (!isHashed) {
+      // Password is stored as plain text - this is a security issue
+      console.error(`SECURITY WARNING: User ${user.email} has plain text password stored in database`);
+      return NextResponse.json(
+        { 
+          error: 'Account security issue detected. Please reset your password or contact support.',
+          success: false 
+        },
+        { status: 500 }
+      );
+    }
+
+    // Compare plain password with hashed password
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
 
     if (!isPasswordCorrect) {
@@ -88,6 +106,16 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Login error:', error);
+    console.error('Error stack:', error.stack);
+    
+    // More specific error handling
+    if (error.message?.includes('bcrypt')) {
+      return NextResponse.json({
+        error: 'Password verification error. Please contact support.',
+        success: false
+      }, { status: 500 });
+    }
+    
     return NextResponse.json({
       error: error.message || 'Login failed',
       success: false
