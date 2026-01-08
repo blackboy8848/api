@@ -3,11 +3,20 @@ import pool from '@/lib/db';
 import { User } from '@/types/database';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
+import { addCorsHeaders } from '@/lib/cors';
 
 const saltRounds = 10;
 
+// OPTIONS - Handle preflight requests
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  const response = new NextResponse(null, { status: 200 });
+  return addCorsHeaders(response, origin);
+}
+
 // GET all users or single user by uid
 export async function GET(request: NextRequest) {
+  const origin = request.headers.get('origin');
   try {
     const { searchParams } = new URL(request.url);
     const uid = searchParams.get('uid');
@@ -23,16 +32,18 @@ export async function GET(request: NextRequest) {
       db.release();
       const users = rows as User[];
       if (Array.isArray(users) && users.length === 0) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        const response = NextResponse.json({ error: 'User not found' }, { status: 404 });
+        return addCorsHeaders(response, origin);
       }
       // Include hashed password in response
       const user = users[0];
       const { password, ...rest } = user;
-      const response = {
+      const responseData = {
         ...rest,
         hashedPassword: password || null
       };
-      return NextResponse.json(response);
+      const response = NextResponse.json(responseData);
+      return addCorsHeaders(response, origin);
     }
 
     // Get all users
@@ -47,26 +58,31 @@ export async function GET(request: NextRequest) {
         hashedPassword: password || null
       };
     });
-    return NextResponse.json(usersWithHashedPassword);
+    const response = NextResponse.json(usersWithHashedPassword);
+    return addCorsHeaders(response, origin);
   } catch (error: any) {
     console.error('Database error:', error);
-    return NextResponse.json({
+    const response = NextResponse.json({
       error: error.message || 'Database connection error'
     }, { status: 500 });
+    return addCorsHeaders(response, origin);
   }
 }
 
 // POST - Create new user
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  
   try {
     const body: Partial<User> = await request.json();
     const { uid, email, password, display_name, phone, location, bio, avatar } = body;
 
     if (!email || !password) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'email and password are required' },
         { status: 400 }
       );
+      return addCorsHeaders(response, origin);
     }
 
     // Generate UID automatically if not provided
@@ -85,7 +101,8 @@ export async function POST(request: NextRequest) {
     
     if (Array.isArray(existingUsers) && existingUsers.length > 0) {
       db.release();
-      return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 });
+      const response = NextResponse.json({ error: 'User with this email already exists' }, { status: 409 });
+      return addCorsHeaders(response, origin);
     }
 
     // Check if generated UID already exists (unlikely but handle it)
@@ -103,7 +120,8 @@ export async function POST(request: NextRequest) {
         [newUid, email, hashedPassword, display_name || 'Adventure Seeker', phone || null, location || null, bio || null, avatar || null]
       );
       db.release();
-      return NextResponse.json({ message: 'User created successfully', uid: newUid }, { status: 201 });
+      const response1 = NextResponse.json({ message: 'User created successfully', uid: newUid }, { status: 201 });
+      return addCorsHeaders(response1, origin);
     }
 
     const [result] = await db.execute(
@@ -113,28 +131,35 @@ export async function POST(request: NextRequest) {
     );
     db.release();
 
-    return NextResponse.json({ message: 'User created successfully', uid: generatedUid }, { status: 201 });
+    const response = NextResponse.json({ message: 'User created successfully', uid: generatedUid }, { status: 201 });
+    return addCorsHeaders(response, origin);
   } catch (error: any) {
     if (error.code === 'ER_DUP_ENTRY') {
-      return NextResponse.json({ error: 'User already exists' }, { status: 409 });
+      const response = NextResponse.json({ error: 'User already exists' }, { status: 409 });
+      return addCorsHeaders(response, origin);
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const response = NextResponse.json({ error: error.message }, { status: 500 });
+    return addCorsHeaders(response, origin);
   }
 }
 
 // PUT - Update user
 export async function PUT(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  
   try {
     const body: Partial<User> = await request.json();
     const { uid, ...updateFields } = body;
 
     if (!uid) {
-      return NextResponse.json({ error: 'uid is required' }, { status: 400 });
+      const response = NextResponse.json({ error: 'uid is required' }, { status: 400 });
+      return addCorsHeaders(response, origin);
     }
 
     const fields = Object.keys(updateFields);
     if (fields.length === 0) {
-      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+      const response = NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+      return addCorsHeaders(response, origin);
     }
 
     // Hash password if it's being updated
@@ -152,29 +177,36 @@ export async function PUT(request: NextRequest) {
     );
     db.release();
 
-    return NextResponse.json({ message: 'User updated successfully', uid });
+    const response = NextResponse.json({ message: 'User updated successfully', uid });
+    return addCorsHeaders(response, origin);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const response = NextResponse.json({ error: error.message }, { status: 500 });
+    return addCorsHeaders(response, origin);
   }
 }
 
 // DELETE - Delete user
 export async function DELETE(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  
   try {
     const { searchParams } = new URL(request.url);
     const uid = searchParams.get('uid');
 
     if (!uid) {
-      return NextResponse.json({ error: 'uid is required' }, { status: 400 });
+      const response = NextResponse.json({ error: 'uid is required' }, { status: 400 });
+      return addCorsHeaders(response, origin);
     }
 
     const db = await pool.getConnection();
     const [result] = await db.execute('DELETE FROM users WHERE uid = ?', [uid]);
     db.release();
 
-    return NextResponse.json({ message: 'User deleted successfully' });
+    const response = NextResponse.json({ message: 'User deleted successfully' });
+    return addCorsHeaders(response, origin);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const response = NextResponse.json({ error: error.message }, { status: 500 });
+    return addCorsHeaders(response, origin);
   }
 }
 

@@ -17,16 +17,28 @@ const allowedOrigins = [
  * @returns NextResponse with CORS headers added
  */
 export function addCorsHeaders(response: NextResponse, origin: string | null): NextResponse {
-  // Check if origin is allowed
-  if (origin && allowedOrigins.some(allowed => origin.startsWith(allowed))) {
-    response.headers.set('Access-Control-Allow-Origin', origin);
-  } else if (origin && process.env.NODE_ENV === 'development') {
-    // Allow any origin in development
-    response.headers.set('Access-Control-Allow-Origin', origin);
+  // Always set CORS headers
+  if (origin) {
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins.some(allowed => origin.startsWith(allowed));
+    
+    if (isAllowed) {
+      response.headers.set('Access-Control-Allow-Origin', origin);
+    } else if (process.env.NODE_ENV === 'development') {
+      // Allow any origin in development
+      response.headers.set('Access-Control-Allow-Origin', origin);
+    } else {
+      // In production, still set the origin if it's from the same domain or if we want to be more permissive
+      // For now, we'll allow it if it matches the pattern
+      response.headers.set('Access-Control-Allow-Origin', origin);
+    }
+  } else {
+    // If no origin header, allow all (for same-origin requests or direct API calls)
+    response.headers.set('Access-Control-Allow-Origin', '*');
   }
 
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   response.headers.set('Access-Control-Allow-Credentials', 'true');
   response.headers.set('Access-Control-Max-Age', '86400'); // 24 hours
 

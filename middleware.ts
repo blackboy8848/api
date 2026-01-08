@@ -45,9 +45,24 @@ export function middleware(request: NextRequest) {
       });
     }
 
-    // For actual requests, we'll add CORS headers in the response
-    // This is handled by the route handlers
-    return NextResponse.next();
+    // For actual requests, create a response with CORS headers
+    const response = NextResponse.next();
+    
+    // Add CORS headers to the response
+    if (origin) {
+      const isAllowed = allowedOrigins.some(allowed => origin.startsWith(allowed));
+      if (isAllowed || process.env.NODE_ENV === 'development') {
+        response.headers.set('Access-Control-Allow-Origin', origin);
+      }
+    } else {
+      response.headers.set('Access-Control-Allow-Origin', '*');
+    }
+    
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    
+    return response;
   }
 
   return NextResponse.next();
