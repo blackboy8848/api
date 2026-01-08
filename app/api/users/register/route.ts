@@ -3,8 +3,16 @@ import pool from '@/lib/db';
 import { User } from '@/types/database';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
+import { addCorsHeaders } from '@/lib/cors';
 
 const saltRounds = 10;
+
+// OPTIONS - Handle preflight requests
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  const response = new NextResponse(null, { status: 200 });
+  return addCorsHeaders(response, origin);
+}
 
 // GET - Method not allowed (register requires POST)
 export async function GET() {
@@ -16,33 +24,38 @@ export async function GET() {
 
 // POST - Register new user
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  
   try {
     const body: Partial<User> = await request.json();
     const { uid, email, password, display_name, phone, location, bio, avatar } = body;
 
     // Validate required fields
     if (!email || !password) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'Email and password are required', success: false },
         { status: 400 }
       );
+      return addCorsHeaders(response, origin);
     }
 
     // Validate email format (basic validation)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'Invalid email format', success: false },
         { status: 400 }
       );
+      return addCorsHeaders(response, origin);
     }
 
     // Validate password strength (minimum 6 characters)
     if (password.length < 6) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'Password must be at least 6 characters long', success: false },
         { status: 400 }
       );
+      return addCorsHeaders(response, origin);
     }
 
     // Generate UID automatically if not provided
@@ -61,10 +74,11 @@ export async function POST(request: NextRequest) {
     
     if (Array.isArray(existingUsers) && existingUsers.length > 0) {
       db.release();
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'User with this email already exists', success: false },
         { status: 409 }
       );
+      return addCorsHeaders(response, origin);
     }
 
     // Check if generated UID already exists (unlikely but handle it)
@@ -97,27 +111,30 @@ export async function POST(request: NextRequest) {
     );
     db.release();
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: 'User registered successfully',
       uid: finalUid
     }, { status: 201 });
+    return addCorsHeaders(response, origin);
 
   } catch (error: any) {
     console.error('Registration error:', error);
     
     // Handle duplicate entry error
     if (error.code === 'ER_DUP_ENTRY') {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: 'User already exists', success: false },
         { status: 409 }
       );
+      return addCorsHeaders(response, origin);
     }
     
-    return NextResponse.json({
+    const response = NextResponse.json({
       error: error.message || 'Registration failed',
       success: false
     }, { status: 500 });
+    return addCorsHeaders(response, origin);
   }
 }
 
