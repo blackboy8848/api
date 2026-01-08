@@ -21,11 +21,11 @@ export async function GET() {
 
 // POST - Login user with uid/email and password
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  
   try {
     const body = await request.json();
     const { uid, email, password } = body;
-
-    const origin = request.headers.get('origin');
 
     // Validate input
     if (!password) {
@@ -114,7 +114,6 @@ export async function POST(request: NextRequest) {
     // Password is correct - return success with user data (excluding password)
     const { password: _, ...userWithoutPassword } = user;
 
-    const origin = request.headers.get('origin');
     const response = NextResponse.json({
       success: true,
       message: 'Login successful',
@@ -126,8 +125,6 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Login error:', error);
     console.error('Error stack:', error.stack);
-    
-    const origin = request.headers.get('origin');
     
     // More specific error handling
     if (error.message?.includes('bcrypt')) {
