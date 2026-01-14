@@ -51,6 +51,8 @@ export async function GET(
         v.description AS variant_description,
         v.price,
         v.capacity,
+        v.image_url,
+        v.duration_label AS variant_duration_label,
         (v.capacity - IFNULL(SUM(CASE 
           WHEN b.status IN ('confirmed', 'completed') 
           THEN b.seats ELSE 0 END), 0)) AS available_seats,
@@ -98,6 +100,8 @@ export async function GET(
         description: row.variant_description,
         price: parseFloat(row.price),
         capacity: row.capacity,
+        image_url: row.image_url,
+        duration_label: row.variant_duration_label,
         available_seats: row.available_seats,
         availability: row.availability
       });

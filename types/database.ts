@@ -122,7 +122,10 @@ export interface TourSlotVariant {
   description?: string;
   price: number;
   capacity: number;
+  image_url?: string;
+  duration_label?: string;
   created_at?: Date;
+  updated_at?: Date;
 }
 
 export interface Booking {

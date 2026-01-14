@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body: TourSlotVariant = await request.json();
-    const { slot_id, variant_name, description, price, capacity } = body;
+    const { slot_id, variant_name, description, price, capacity, image_url, duration_label } = body;
 
     if (!slot_id || !variant_name || price === undefined || !capacity) {
       return NextResponse.json(
@@ -86,9 +86,9 @@ export async function POST(request: NextRequest) {
     }
 
     const [result] = await db.execute(
-      `INSERT INTO tour_slot_variants (slot_id, variant_name, description, price, capacity) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [slot_id, variant_name, description || null, price, capacity]
+      `INSERT INTO tour_slot_variants (slot_id, variant_name, description, price, capacity, image_url, duration_label) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [slot_id, variant_name, description || null, price, capacity, image_url || null, duration_label || null]
     );
     db.release();
 
