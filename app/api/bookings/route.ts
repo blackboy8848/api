@@ -73,26 +73,42 @@ export async function POST(request: NextRequest) {
     const body: Booking = await request.json();
     const { 
       id, user_id, tour_id, slot_id, variant_id, seats,
-      tour_name, customer_name, customer_email, phone_number, travel_date, total_amount 
+      tour_name, customer_name, customer_email, phone_number, travel_date, total_amount,
+      number_of_seats
     } = body;
 
+    // Map number_of_seats to seats if provided
+    const seatsValue = seats || number_of_seats;
+
     // Validate required fields
-    if (!user_id || !tour_id || !slot_id || !variant_id || !seats) {
+    if (!user_id || !tour_id || !slot_id || !variant_id || !seatsValue) {
       await db.rollback();
       db.release();
       return NextResponse.json(
-        { error: 'user_id, tour_id, slot_id, variant_id, and seats are required' },
+        { error: 'user_id, tour_id, slot_id, variant_id, and seats (or number_of_seats) are required' },
         { status: 400 }
       );
     }
 
-    if (seats <= 0) {
+    if (seatsValue <= 0) {
       await db.rollback();
       db.release();
       return NextResponse.json(
         { error: 'seats must be greater than 0' },
         { status: 400 }
       );
+    }
+
+    // Verify slot exists
+    const [slotRows] = await db.execute(
+      'SELECT id FROM tour_slots WHERE id = ?',
+      [slot_id]
+    );
+    const slots = slotRows as any[];
+    if (Array.isArray(slots) && slots.length === 0) {
+      await db.rollback();
+      db.release();
+      return NextResponse.json({ error: 'Slot not found' }, { status: 404 });
     }
 
     // Lock variant row for update to prevent race conditions
@@ -126,14 +142,14 @@ export async function POST(request: NextRequest) {
     const availability = availabilityRows as any[];
     const availableSeats = availability[0]?.available_seats ?? variant.capacity;
 
-    if (availableSeats < seats) {
+    if (availableSeats < seatsValue) {
       await db.rollback();
       db.release();
       return NextResponse.json(
         { 
           error: 'Not enough available seats',
           available_seats: availableSeats,
-          requested_seats: seats
+          requested_seats: seatsValue
         },
         { status: 400 }
       );
@@ -146,14 +162,11 @@ export async function POST(request: NextRequest) {
     await db.execute(
       `INSERT INTO bookings (
         id, user_id, tour_id, slot_id, variant_id, seats,
-        tour_name, customer_name, customer_email, phone_number, 
-        travel_date, total_amount, status, payment_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?)`,
+        tour_name, travel_date, total_amount, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed')`,
       [
-        bookingId, user_id, tour_id, slot_id, variant_id, seats,
-        tour_name || null, customer_name || null, customer_email || null, 
-        phone_number || null, travel_date || null, total_amount || 0,
-        body.payment_status || 'Not Verified'
+        bookingId, user_id, tour_id, slot_id, variant_id, seatsValue,
+        tour_name || null, travel_date || null, total_amount || 0
       ]
     );
 
