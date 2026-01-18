@@ -1332,6 +1332,107 @@ Deletes a lead.
 
 ---
 
+### 15. Coupons (`/api/coupons`)
+
+Bulk coupon creation and management. Coupons can be scoped at **Company**, **Event**, or **Batch** level. Discount is applied per ticket.
+
+- **GET** `/api/coupons` - List coupons with optional filters
+- **GET** `/api/coupons?search={term}` - Search by coupon code
+- **GET** `/api/coupons?coupon_level=company|event|batch` - Filter by level
+- **GET** `/api/coupons?coupon_type=private|public` - Filter by type
+- **GET** `/api/coupons?sort=newest|oldest` - Sort by created date (default: newest)
+- **POST** `/api/coupons` - Create coupon (optionally with `event_ids`, `slot_ids`)
+- **GET** `/api/coupons/{id}` - Get single coupon with `event_ids` and `slot_ids`
+- **PUT** `/api/coupons/{id}` - Update coupon and/or event/slot associations
+- **DELETE** `/api/coupons/{id}` - Delete coupon (cascades to `coupon_events`, `coupon_slots`)
+
+#### POST `/api/coupons`
+
+**Required:**
+- `coupon_code` (string) - Unique code
+- `discount` (number) - Discount value (e.g. 10 for 10%, or fixed amount)
+
+**Optional (with defaults):**
+- `coupon_level` - `company` \| `event` \| `batch` (default: `event`)
+- `discount_type` - `percentage` \| `fixed` (default: `percentage`)
+- `discount_applicable` - `per_person` \| `per_order` \| `per_ticket` (default: `per_person`)
+- `coupon_inventory` (number, default: 0)
+- `group_size` (number, optional)
+- `affiliate_email` (string, optional)
+- `coupon_type` - `private` \| `public` (default: `private`)
+- `valid_from`, `valid_till` (date `YYYY-MM-DD`, optional)
+- `validity_type` - `fixed_date` \| `relative_date` (default: `fixed_date`)
+- `company_id` (string, optional)
+- `event_ids` (string[]) - For event/batch level; `events.id` values
+- `slot_ids` (number[]) - For batch level; `tour_slots.id` values
+
+**Example POST:**
+```json
+{
+  "coupon_code": "SAVE10",
+  "discount": 10,
+  "coupon_level": "event",
+  "discount_type": "percentage",
+  "discount_applicable": "per_person",
+  "coupon_inventory": 100,
+  "group_size": 2,
+  "affiliate_email": "affiliate@example.com",
+  "coupon_type": "private",
+  "valid_from": "2025-01-01",
+  "valid_till": "2025-12-31",
+  "validity_type": "fixed_date",
+  "event_ids": ["event123", "event456"]
+}
+```
+
+**Response (201):**
+```json
+{
+  "message": "Coupon created successfully",
+  "id": 1,
+  "event_ids": ["event123", "event456"],
+  "slot_ids": []
+}
+```
+
+#### GET `/api/coupons/{id}`
+
+Returns the coupon with `event_ids` and `slot_ids` populated.
+
+**Response (200):**
+```json
+{
+  "id": 1,
+  "coupon_level": "event",
+  "coupon_code": "SAVE10",
+  "discount_type": "percentage",
+  "discount_applicable": "per_person",
+  "discount": 10,
+  "coupon_inventory": 100,
+  "group_size": 2,
+  "affiliate_email": "affiliate@example.com",
+  "coupon_type": "private",
+  "valid_from": "2025-01-01",
+  "valid_till": "2025-12-31",
+  "validity_type": "fixed_date",
+  "company_id": null,
+  "created_at": "2025-01-15T00:00:00.000Z",
+  "updated_at": "2025-01-15T00:00:00.000Z",
+  "event_ids": ["event123", "event456"],
+  "slot_ids": []
+}
+```
+
+#### PUT `/api/coupons/{id}`
+
+Send only the fields to update. To replace event/slot links, send `event_ids` and/or `slot_ids`; existing links are replaced. Omit `event_ids`/`slot_ids` to leave them unchanged.
+
+#### DELETE `/api/coupons/{id}`
+
+Deletes the coupon. Rows in `coupon_events` and `coupon_slots` are removed by CASCADE.
+
+---
+
 ## Response Format
 
 ### Success Response

@@ -225,3 +225,32 @@ export interface Lead {
   created_at?: Date;
   updated_at?: Date;
 }
+
+// Coupon level: company, event, batch
+export type CouponLevel = 'company' | 'event' | 'batch';
+export type CouponDiscountType = 'percentage' | 'fixed';
+export type CouponDiscountApplicable = 'per_person' | 'per_order' | 'per_ticket';
+export type CouponType = 'private' | 'public';
+export type CouponValidityType = 'fixed_date' | 'relative_date';
+
+export interface Coupon {
+  id?: number;
+  coupon_level: CouponLevel;
+  coupon_code: string;
+  discount_type: CouponDiscountType;
+  discount_applicable: CouponDiscountApplicable;
+  discount: number;
+  coupon_inventory: number;
+  group_size?: number | null;
+  affiliate_email?: string | null;
+  coupon_type: CouponType;
+  valid_from?: string | null; // DATE YYYY-MM-DD
+  valid_till?: string | null;
+  validity_type: CouponValidityType;
+  company_id?: string | null;
+  created_at?: Date;
+  updated_at?: Date;
+  // Populated by API when level is event or batch:
+  event_ids?: string[];
+  slot_ids?: number[];
+}
