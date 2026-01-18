@@ -3,6 +3,8 @@ import pool from '@/lib/db';
 import { Lead } from '@/types/database';
 import { addCorsHeaders } from '@/lib/cors';
 
+export const dynamic = 'force-dynamic';
+
 type RouteParams = { params: Promise<{ id: string }> | { id: string } };
 
 // GET - Single lead by id (View Details)

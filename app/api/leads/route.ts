@@ -3,6 +3,8 @@ import pool from '@/lib/db';
 import { Lead } from '@/types/database';
 import { addCorsHeaders } from '@/lib/cors';
 
+export const dynamic = 'force-dynamic';
+
 // OPTIONS - Handle preflight for Contact form (cross-origin)
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get('origin');
