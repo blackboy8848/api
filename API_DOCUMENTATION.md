@@ -609,6 +609,8 @@ Returns all tour slots or filtered slots based on query parameters. Results are 
     "tour_id": "tour123",
     "slot_date": "2024-12-24",
     "slot_time": "20:00:00",
+    "slot_end_date": "2024-12-28",
+    "total_capacity": 50,
     "duration_label": "3 hours",
     "created_at": "2024-01-01T00:00:00.000Z"
   }
@@ -622,6 +624,8 @@ Returns all tour slots or filtered slots based on query parameters. Results are 
   "tour_id": "tour123",
   "slot_date": "2024-12-24",
   "slot_time": "20:00:00",
+  "slot_end_date": "2024-12-28",
+  "total_capacity": 50,
   "duration_label": "3 hours",
   "created_at": "2024-01-01T00:00:00.000Z"
 }
@@ -637,6 +641,8 @@ Creates a new tour slot.
   "tour_id": "tour123",  // Required
   "slot_date": "2024-12-24",  // Required - DATE format: YYYY-MM-DD
   "slot_time": "20:00:00",  // Required - TIME format: HH:MM:SS
+  "slot_end_date": "2024-12-28",  // Optional - End date only (YYYY-MM-DD, no time)
+  "total_capacity": 50,  // Optional - Slot capacity
   "duration_label": "3 hours"  // Optional
 }
 ```
@@ -647,6 +653,8 @@ Creates a new tour slot.
 - `slot_time` - Slot time in HH:MM:SS format
 
 **Optional Fields:**
+- `slot_end_date` - End date only in YYYY-MM-DD format (no time)
+- `total_capacity` - Slot capacity (integer)
 - `duration_label` - Human-readable duration label (e.g., "3 hours", "Full Day")
 
 **Response (Success - 201):**
@@ -672,6 +680,8 @@ Updates an existing tour slot. Requires `id` in the request body.
   "id": 1,  // Required
   "slot_date": "2024-12-26",  // Optional
   "slot_time": "21:00:00",  // Optional
+  "slot_end_date": "2024-12-30",  // Optional - End date only (YYYY-MM-DD, no time)
+  "total_capacity": 60,  // Optional - Slot capacity
   "duration_label": "4 hours"  // Optional
 }
 ```
@@ -1175,6 +1185,150 @@ Deletes a booking by `id`.
   "is_published": true
 }
 ```
+
+---
+
+### 14. Leads (`/api/leads`)
+
+Lead capture from the **Contact Us** form and **Lead Channels** dashboard. Supports filtering by state (Hot/Warm/Cold), source (manual/onelink/other), status, and assignment.
+
+- **GET** `/api/leads` - List all leads with optional filters
+- **GET** `/api/leads?search={term}` - Search by name or email
+- **GET** `/api/leads?lead_state=Hot|Warm|Cold` - Filter by state
+- **GET** `/api/leads?lead_source=manual|onelink|other` - Filter by source
+- **GET** `/api/leads?lead_status={status}` - Filter by lead status
+- **GET** `/api/leads?assigned_to={uid}` - Filter by assigned user
+- **GET** `/api/leads?sort=newest|oldest` - Sort by created date (default: newest)
+- **POST** `/api/leads` - Create lead (e.g. from Contact Us form)
+- **GET** `/api/leads/{id}` - Get single lead (View Details)
+- **PUT** `/api/leads/{id}` - Update lead (Edit Enquiry)
+- **DELETE** `/api/leads/{id}` - Delete lead (Delete Enquiry)
+
+#### GET `/api/leads`
+
+Returns leads with optional filters. Ordered by `created_at` descending by default.
+
+**Query Parameters:**
+- `search` (optional) - Search in `name` or `email`
+- `lead_state` (optional) - `Hot`, `Warm`, `Cold`
+- `lead_source` (optional) - `other`, `manual`, `onelink`
+- `lead_status` (optional) - e.g. `New Enquiry`, `Contacted`, `Booked`, etc.
+- `assigned_to` (optional) - `users.uid`
+- `sort` (optional) - `newest` (default) or `oldest`
+
+**Response (200):**
+```json
+[
+  {
+    "id": 11,
+    "name": "yash mhatre",
+    "email": "yash@example.com",
+    "phone_country_code": "91",
+    "phone_number": "8291616335",
+    "lead_source": "other",
+    "lead_state": "Cold",
+    "lead_status": "New Enquiry",
+    "assigned_to": "user-uid-here",
+    "enquiry_destination": "Bali Adventure",
+    "tour_id": null,
+    "event_id": null,
+    "slot_id": null,
+    "notes": null,
+    "remarks": null,
+    "converted_to_booking_id": null,
+    "created_at": "2026-01-15T00:00:00.000Z",
+    "updated_at": "2026-01-15T00:00:00.000Z"
+  }
+]
+```
+
+#### POST `/api/leads`
+
+Create a lead (e.g. from the Contact Us form or manual entry in Lead Channels).
+
+**Request Body (required):**
+- `name` (string) - Required
+- `email` (string) - Required
+- `phone_number` (string) - Required
+
+**Request Body (optional):**
+- `phone_country_code` (string) - Default `91`
+- `lead_source` - `other` (default), `manual`, `onelink`
+- `lead_state` - `Hot`, `Warm`, `Cold` (default `Cold`)
+- `lead_status` (string) - Default `New Enquiry`
+- `assigned_to` (string) - `users.uid`
+- `enquiry_destination` (string) - e.g. "Bali Adventure", "MANALI - KASOL-MANIKARAN"
+- `tour_id` (string) - For "Select Event" when it is a tour
+- `event_id` (string) - For "Select Event" when it is an event
+- `slot_id` (number) - For "Select Departure Batch" (`tour_slots.id`)
+- `notes` (string) - From Contact Us "Notes"
+- `remarks` (string) - Internal remarks
+
+**Example (Contact Us form):**
+```json
+{
+  "name": "Alex Rose",
+  "email": "alexrose123@gmail.com",
+  "phone_country_code": "91",
+  "phone_number": "9876543210",
+  "event_id": "evt-1",
+  "slot_id": 5,
+  "notes": "Interested in Manali batch"
+}
+```
+
+**Response (201):**
+```json
+{
+  "message": "Lead created successfully",
+  "id": 12
+}
+```
+
+#### GET `/api/leads/{id}`
+
+Returns a single lead by numeric `id`.
+
+**Response (200):** Same shape as one element in the GET list. **404** if not found.
+
+#### PUT `/api/leads/{id}`
+
+Update a lead (Edit Enquiry). Send only the fields to change.
+
+**Example:**
+```json
+{
+  "lead_state": "Warm",
+  "lead_status": "Contacted",
+  "assigned_to": "user-uid",
+  "remarks": "Spoke on call, sending quote"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Lead updated successfully",
+  "id": "11"
+}
+```
+
+#### DELETE `/api/leads/{id}`
+
+Deletes a lead.
+
+**Response (200):**
+```json
+{
+  "message": "Lead deleted successfully"
+}
+```
+
+**Lead status values:** New Enquiry, Call Not Picked, Contacted, Qualified, Plan & Quote Sent, In Pipeline, Negotiating, Awaiting Payment, Booked, Lost & Closed, Future Prospect.
+
+**Lead state values:** Hot, Warm, Cold.
+
+**Lead source values:** other, manual, onelink.
 
 ---
 

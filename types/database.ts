@@ -111,6 +111,8 @@ export interface TourSlot {
   tour_id: string;
   slot_date: string; // DATE format: YYYY-MM-DD
   slot_time: string; // TIME format: HH:MM:SS
+  slot_end_date?: string; // DATE only, YYYY-MM-DD (no time)
+  total_capacity?: number; // slot capacity
   duration_label?: string;
   created_at?: Date;
 }
@@ -122,10 +124,7 @@ export interface TourSlotVariant {
   description?: string;
   price: number;
   capacity: number;
-  image_url?: string;
-  duration_label?: string;
   created_at?: Date;
-  updated_at?: Date;
 }
 
 export interface Booking {
@@ -187,5 +186,42 @@ export interface BlogPost {
   tags?: any;
   sections?: any;
   is_published?: boolean;
+  updated_at?: Date;
+}
+
+export type LeadState = 'Hot' | 'Warm' | 'Cold';
+export type LeadSource = 'other' | 'manual' | 'onelink';
+
+export type LeadStatus =
+  | 'New Enquiry'
+  | 'Call Not Picked'
+  | 'Contacted'
+  | 'Qualified'
+  | 'Plan & Quote Sent'
+  | 'In Pipeline'
+  | 'Negotiating'
+  | 'Awaiting Payment'
+  | 'Booked'
+  | 'Lost & Closed'
+  | 'Future Prospect';
+
+export interface Lead {
+  id?: number;
+  name: string;
+  email: string;
+  phone_country_code?: string;
+  phone_number: string;
+  lead_source?: LeadSource;
+  lead_state?: LeadState;
+  lead_status?: LeadStatus;
+  assigned_to?: string; // users.uid
+  enquiry_destination?: string;
+  tour_id?: string;
+  event_id?: string;
+  slot_id?: number;
+  notes?: string;
+  remarks?: string;
+  converted_to_booking_id?: string;
+  created_at?: Date;
   updated_at?: Date;
 }
