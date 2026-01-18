@@ -45,14 +45,14 @@ export async function GET(
         s.id AS slot_id,
         s.slot_date,
         s.slot_time,
+        s.slot_end_date,
+        s.total_capacity,
         s.duration_label,
         v.id AS variant_id,
         v.variant_name,
         v.description AS variant_description,
         v.price,
         v.capacity,
-        v.image_url,
-        v.duration_label AS variant_duration_label,
         (v.capacity - IFNULL(SUM(CASE 
           WHEN b.status IN ('confirmed', 'completed') 
           THEN b.seats ELSE 0 END), 0)) AS available_seats,
@@ -89,6 +89,8 @@ export async function GET(
           slot_id: row.slot_id,
           slot_date: row.slot_date,
           slot_time: row.slot_time,
+          slot_end_date: row.slot_end_date,
+          total_capacity: row.total_capacity,
           duration_label: row.duration_label,
           variants: []
         });
@@ -100,8 +102,6 @@ export async function GET(
         description: row.variant_description,
         price: parseFloat(row.price),
         capacity: row.capacity,
-        image_url: row.image_url,
-        duration_label: row.variant_duration_label,
         available_seats: row.available_seats,
         availability: row.availability
       });

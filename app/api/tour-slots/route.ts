@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body: TourSlot = await request.json();
-    const { tour_id, slot_date, slot_time, duration_label } = body;
+    const { tour_id, slot_date, slot_time, slot_end_date, total_capacity, duration_label } = body;
 
     if (!tour_id || !slot_date || !slot_time) {
       return NextResponse.json(
@@ -72,9 +72,9 @@ export async function POST(request: NextRequest) {
     }
 
     const [result] = await db.execute(
-      `INSERT INTO tour_slots (tour_id, slot_date, slot_time, duration_label) 
-       VALUES (?, ?, ?, ?)`,
-      [tour_id, slot_date, slot_time, duration_label || null]
+      `INSERT INTO tour_slots (tour_id, slot_date, slot_time, slot_end_date, total_capacity, duration_label) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [tour_id, slot_date, slot_time, slot_end_date || null, total_capacity ?? null, duration_label || null]
     );
     db.release();
 
