@@ -254,3 +254,48 @@ export interface Coupon {
   event_ids?: string[];
   slot_ids?: number[];
 }
+
+// Navigation permissions structure for super users
+export interface NavigationPermissions {
+  my_events?: boolean;
+  leads?: {
+    enabled?: boolean;
+    channel_leads?: boolean;
+    missed_checkouts?: boolean;
+  };
+  bookings?: {
+    enabled?: boolean;
+    all_bookings?: boolean;
+    transactions?: boolean;
+    settlements?: boolean;
+    customers?: boolean;
+    refunds?: boolean;
+  };
+  calendar?: boolean;
+  coupons?: boolean;
+  operations?: boolean;
+  oneinbox?: boolean;
+  onelink?: boolean;
+  instagram?: boolean;
+  whatsapp?: boolean;
+  pickup_points?: boolean;
+  analytics?: {
+    enabled?: boolean;
+    lead_analytics?: boolean;
+    booking_analytics?: boolean;
+  };
+  policies?: boolean;
+  settings?: boolean;
+  user_management?: boolean;
+}
+
+export interface SuperUser {
+  id?: number;
+  user_id: string; // References users.uid
+  email: string;
+  display_name?: string;
+  is_active: boolean | number; // Native active status (1 = active, 0 = inactive)
+  navigation_permissions: NavigationPermissions | string; // JSON string in DB, object in TypeScript
+  created_at?: Date;
+  updated_at?: Date;
+}
