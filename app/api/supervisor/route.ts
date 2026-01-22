@@ -161,7 +161,7 @@ export async function PUT(request: NextRequest) {
 
     // Build dynamic update query
     const updates: string[] = [];
-    const params: (string | number)[] = [];
+    const params: (string | number | null)[] = [];
 
     if (email !== undefined) {
       updates.push('email = ?');
