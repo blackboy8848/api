@@ -11,6 +11,13 @@ DB_HOST=localhost
 DB_USER=u690251984_yashop8848
 DB_PASSWORD=Yashop8848
 DB_NAME=u690251984_yashop8848
+
+# SMTP Configuration for OTP Service
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_USER=your-email@mountainmiragebackpackers.in
+SMTP_PASSWORD=your-email-password
+SMTP_FROM=your-email@mountainmiragebackpackers.in
 ```
 
 ## Base URL
@@ -1433,6 +1440,314 @@ Deletes the coupon. Rows in `coupon_events` and `coupon_slots` are removed by CA
 
 ---
 
+### 16. Supervisor (`/api/supervisor`)
+
+Super user/supervisor role management with role-based navigation permissions. This endpoint manages super admin accounts with granular access control to different navigation items.
+
+- **GET** `/api/supervisor` - List all super users
+- **GET** `/api/supervisor?id={id}` - Get single super user by id
+- **GET** `/api/supervisor?user_id={user_id}` - Get single super user by user_id
+- **GET** `/api/supervisor?email={email}` - Get super user by email
+- **GET** `/api/supervisor?is_active={true|false}` - Filter by active status
+- **POST** `/api/supervisor` - Create new super user
+- **PUT** `/api/supervisor` - Update super user (requires `id` or `user_id` in body)
+- **DELETE** `/api/supervisor?id={id}` - Delete super user by id
+- **DELETE** `/api/supervisor?user_id={user_id}` - Delete super user by user_id
+
+#### GET `/api/supervisor`
+
+Returns all super users or a single super user if query parameters are provided.
+
+**Query Parameters:**
+- `id` (optional) - Super user ID to retrieve a specific super user
+- `user_id` (optional) - User ID (references `users.uid`) to retrieve a specific super user
+- `email` (optional) - Email address to filter by
+- `is_active` (optional) - Filter by active status (`true` or `false`)
+
+**Response (All Super Users - 200):**
+```json
+[
+  {
+    "id": 1,
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "supervisor@example.com",
+    "display_name": "Super Admin",
+    "is_active": true,
+    "navigation_permissions": {
+      "my_events": true,
+      "leads": {
+        "enabled": true,
+        "channel_leads": true,
+        "missed_checkouts": true
+      },
+      "bookings": {
+        "enabled": true,
+        "all_bookings": true,
+        "transactions": true,
+        "settlements": true,
+        "customers": true,
+        "refunds": true
+      },
+      "calendar": true,
+      "coupons": true,
+      "operations": true,
+      "oneinbox": true,
+      "onelink": true,
+      "instagram": true,
+      "whatsapp": true,
+      "pickup_points": true,
+      "analytics": {
+        "enabled": true,
+        "lead_analytics": true,
+        "booking_analytics": true
+      },
+      "policies": true,
+      "settings": true,
+      "user_management": true
+    },
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "updated_at": "2024-01-01T00:00:00.000Z"
+  }
+]
+```
+
+**Response (Single Super User - 200):**
+Returns a single object instead of an array when `id` or `user_id` is provided.
+
+#### POST `/api/supervisor`
+
+Creates a new super user with role-based navigation permissions.
+
+**Request Body (required):**
+- `user_id` (string) - User ID (references `users.uid`) - must be unique
+- `email` (string) - Super user email address - must be unique
+- `navigation_permissions` (object | string) - JSON object or JSON string defining navigation permissions
+
+**Request Body (optional):**
+- `display_name` (string) - Display name for the super user
+- `is_active` (boolean) - Active status (default: `true`)
+
+**Example Request:**
+```json
+{
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "supervisor@example.com",
+  "display_name": "Super Admin",
+  "is_active": true,
+  "navigation_permissions": {
+    "my_events": true,
+    "leads": {
+      "enabled": true,
+      "channel_leads": true,
+      "missed_checkouts": true
+    },
+    "bookings": {
+      "enabled": true,
+      "all_bookings": true,
+      "transactions": true,
+      "settlements": true,
+      "customers": true,
+      "refunds": true
+    },
+    "calendar": true,
+    "coupons": true,
+    "operations": true,
+    "oneinbox": true,
+    "onelink": true,
+    "instagram": true,
+    "whatsapp": true,
+    "pickup_points": true,
+    "analytics": {
+      "enabled": true,
+      "lead_analytics": true,
+      "booking_analytics": true
+    },
+    "policies": true,
+    "settings": true,
+    "user_management": true
+  }
+}
+```
+
+**Response (201):**
+```json
+{
+  "message": "Super user created successfully",
+  "id": 1
+}
+```
+
+**Error Responses:**
+- `400` - Missing required fields (`user_id`, `email`, or `navigation_permissions`)
+- `409` - Super user with this `user_id` or `email` already exists
+
+#### PUT `/api/supervisor`
+
+Updates a super user. Send only the fields to update.
+
+**Request Body (required):**
+- `id` (number) OR `user_id` (string) - Required to identify which super user to update
+
+**Request Body (optional):**
+- `email` (string) - Update email address
+- `display_name` (string) - Update display name (can be set to `null`)
+- `is_active` (boolean) - Update active status
+- `navigation_permissions` (object | string) - Update navigation permissions
+
+**Example Request:**
+```json
+{
+  "id": 1,
+  "is_active": false,
+  "navigation_permissions": {
+    "my_events": true,
+    "leads": {
+      "enabled": false,
+      "channel_leads": false,
+      "missed_checkouts": false
+    },
+    "user_management": true
+  }
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Super user updated successfully"
+}
+```
+
+**Error Responses:**
+- `400` - Missing `id` or `user_id` in request body, or no fields to update
+- `404` - Super user not found
+
+#### DELETE `/api/supervisor`
+
+Deletes a super user.
+
+**Query Parameters:**
+- `id` (required if `user_id` not provided) - Super user ID
+- `user_id` (required if `id` not provided) - User ID (references `users.uid`)
+
+**Response (200):**
+```json
+{
+  "message": "Super user deleted successfully"
+}
+```
+
+**Error Responses:**
+- `400` - Missing `id` or `user_id` query parameter
+- `404` - Super user not found
+
+**Navigation Permissions Structure:**
+
+The `navigation_permissions` field is a JSON object that defines which navigation items are active for the super user. Each top-level key represents a navigation section, and nested objects can define sub-items:
+
+- Simple boolean values: `"my_events": true` - enables/disables the feature
+- Nested objects: `"leads": { "enabled": true, "channel_leads": true, "missed_checkouts": true }` - enables the parent feature and its sub-items
+- All navigation items default to `false` if not specified
+
+**Available Navigation Items:**
+- `my_events` - My Events section
+- `leads` - Leads section (with `channel_leads`, `missed_checkouts` sub-items)
+- `bookings` - Bookings section (with `all_bookings`, `transactions`, `settlements`, `customers`, `refunds` sub-items)
+- `calendar` - Calendar feature
+- `coupons` - Coupons management
+- `operations` - Operations section
+- `oneinbox` - OneInbox feature
+- `onelink` - OneLink feature
+- `instagram` - Instagram integration
+- `whatsapp` - WhatsApp integration
+- `pickup_points` - Pickup Points management
+- `analytics` - Analytics section (with `lead_analytics`, `booking_analytics` sub-items)
+- `policies` - Policies management
+- `settings` - Settings section
+- `user_management` - User Management section
+
+---
+
+### 15. OTP Service (`/api/otp`)
+
+One-Time Password (OTP) service for email verification. Generates a random 6-digit OTP and sends it via email.
+
+- **POST** `/api/otp` - Generate and send OTP to email
+- **GET** `/api/otp?email={email}&otp={otp}` - Verify OTP
+
+#### POST `/api/otp`
+
+Generates a random 6-digit OTP and sends it to the specified email address. The OTP is valid for 10 minutes.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response (Success - 200):**
+```json
+{
+  "success": true,
+  "message": "OTP sent successfully to your email",
+  "email": "user@example.com",
+  "expiresIn": "10 minutes",
+  "note": "Please check your email inbox for the OTP code"
+}
+```
+
+**Error Responses:**
+- `400` - Missing or invalid email format
+- `500` - SMTP configuration error or email sending failure
+
+**Security Note:** The OTP is **never** returned in the API response for security reasons. It is only sent via email to the specified address. Users must check their email inbox to retrieve the OTP code.
+
+#### GET `/api/otp`
+
+Verifies an OTP code for a given email address.
+
+**Query Parameters:**
+- `email` (required) - Email address associated with the OTP
+- `otp` (required) - The OTP code to verify
+
+**Response (Success - 200):**
+```json
+{
+  "message": "OTP verified successfully",
+  "valid": true
+}
+```
+
+**Error Responses:**
+- `400` - Missing email or OTP, invalid OTP, or expired OTP
+- `404` - OTP not found for the email address
+
+**Example Usage:**
+
+**Request OTP:**
+```bash
+curl -X POST http://localhost:3000/api/otp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+
+**Verify OTP:**
+```bash
+curl "http://localhost:3000/api/otp?email=user@example.com&otp=123456"
+```
+
+**Environment Variables Required:**
+- `SMTP_HOST` - SMTP server hostname (default: `smtp.hostinger.com`)
+- `SMTP_PORT` - SMTP server port (default: `465`)
+- `SMTP_USER` - Your email address
+- `SMTP_PASSWORD` - Your email password
+- `SMTP_FROM` - Sender email address (optional, defaults to `SMTP_USER`)
+
+---
+
 ## Response Format
 
 ### Success Response
@@ -1468,6 +1783,7 @@ Deletes the coupon. Rows in `coupon_events` and `coupon_slots` are removed by CA
 - Foreign key constraints are enforced by the database
 - All endpoints support CORS
 - **Password Security:** User passwords are automatically hashed using bcrypt (10 salt rounds) before being stored in the database. Passwords are never returned in API responses. The `hashedPassword` field in GET responses is for verification purposes only and should not be exposed in production.
+- **OTP Security:** OTP codes are **never** returned in API responses for security reasons. They are only sent via email to the user's registered email address. Users must check their email inbox to retrieve the OTP code.
 - **UID Generation:** User UIDs are automatically generated as UUIDs if not provided in POST requests. This ensures unique identifiers for all users.
 - **Booking Safety:** Bookings use database transactions with row-level locking (`FOR UPDATE`) to prevent race conditions and overbooking. Availability is checked in real-time before booking creation.
 - **Availability Calculation:** Availability only counts bookings with status 'confirmed' or 'completed'. Cancelled bookings automatically free seats.
