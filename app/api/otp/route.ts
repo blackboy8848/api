@@ -1,32 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { addCorsHeaders } from '@/lib/cors';
 import { sendOTPEmail } from '@/lib/email';
-
-// In-memory storage for OTPs (in production, consider using Redis or database)
-interface OTPData {
-  otp: string;
-  email: string;
-  expiresAt: number;
-}
-
-const otpStorage = new Map<string, OTPData>();
-
-// Clean up expired OTPs every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [email, data] of otpStorage.entries()) {
-    if (data.expiresAt < now) {
-      otpStorage.delete(email);
-    }
-  }
-}, 10 * 60 * 1000); // 10 minutes
-
-/**
- * Generate a random 6-digit OTP
- */
-function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
+import { generateOTP, setOTP, getOTPTTLMs, deleteOTP } from '@/lib/otp';
 
 // OPTIONS - Handle preflight requests
 export async function OPTIONS(request: NextRequest) {
@@ -73,14 +48,10 @@ export async function POST(request: NextRequest) {
 
     // Generate OTP
     const otp = generateOTP();
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes from now
+    const expiresAt = Date.now() + getOTPTTLMs();
 
-    // Store OTP
-    otpStorage.set(email.toLowerCase(), {
-      otp,
-      email: email.toLowerCase(),
-      expiresAt,
-    });
+    // Store OTP (shared with supervisor register)
+    setOTP(email, otp, expiresAt);
 
     // Send OTP via email
     try {
@@ -108,7 +79,7 @@ export async function POST(request: NextRequest) {
       console.error('Error stack:', emailError?.stack);
       console.error('Full error object:', JSON.stringify(emailError, Object.getOwnPropertyNames(emailError), 2));
       
-      otpStorage.delete(email.toLowerCase()); // Remove OTP if email failed
+      deleteOTP(email); // Remove OTP so user can request a new one
       
       const errorMessage = emailError?.message || 'Unknown error occurred';
       const errorCode = emailError?.code || 'UNKNOWN';
@@ -172,35 +143,16 @@ export async function GET(request: NextRequest) {
       return addCorsHeaders(response, origin);
     }
 
-    const storedData = otpStorage.get(email.toLowerCase());
+    const { verifyAndConsumeOTP } = await import('@/lib/otp');
+    const valid = verifyAndConsumeOTP(email, otp);
 
-    if (!storedData) {
+    if (!valid) {
       const response = NextResponse.json(
-        { error: 'OTP not found or expired', valid: false },
-        { status: 404 }
-      );
-      return addCorsHeaders(response, origin);
-    }
-
-    if (storedData.expiresAt < Date.now()) {
-      otpStorage.delete(email.toLowerCase());
-      const response = NextResponse.json(
-        { error: 'OTP has expired', valid: false },
+        { error: 'OTP not found, expired, or invalid', valid: false },
         { status: 400 }
       );
       return addCorsHeaders(response, origin);
     }
-
-    if (storedData.otp !== otp) {
-      const response = NextResponse.json(
-        { error: 'Invalid OTP', valid: false },
-        { status: 400 }
-      );
-      return addCorsHeaders(response, origin);
-    }
-
-    // OTP is valid - remove it after verification
-    otpStorage.delete(email.toLowerCase());
 
     const response = NextResponse.json(
       { message: 'OTP verified successfully', valid: true },

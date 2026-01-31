@@ -1444,12 +1444,14 @@ Deletes the coupon. Rows in `coupon_events` and `coupon_slots` are removed by CA
 
 Super user/supervisor role management with role-based navigation permissions. This endpoint manages super admin accounts with granular access control to different navigation items.
 
+- **POST** `/api/supervisor/login` - Super user login (email + password)
+- **POST** `/api/supervisor/register` - Super user registration (email + OTP + password)
 - **GET** `/api/supervisor` - List all super users
 - **GET** `/api/supervisor?id={id}` - Get single super user by id
 - **GET** `/api/supervisor?user_id={user_id}` - Get single super user by user_id
 - **GET** `/api/supervisor?email={email}` - Get super user by email
 - **GET** `/api/supervisor?is_active={true|false}` - Filter by active status
-- **POST** `/api/supervisor` - Create new super user
+- **POST** `/api/supervisor` - Create new super user (admin use; requires user_id, email, navigation_permissions)
 - **PUT** `/api/supervisor` - Update super user (requires `id` or `user_id` in body)
 - **DELETE** `/api/supervisor?id={id}` - Delete super user by id
 - **DELETE** `/api/supervisor?user_id={user_id}` - Delete super user by user_id
@@ -1641,6 +1643,100 @@ Deletes a super user.
 - `400` - Missing `id` or `user_id` query parameter
 - `404` - Super user not found
 
+#### POST `/api/supervisor/login`
+
+Super user login with email and password. Validates credentials against the `users` table and ensures the user is an active super user in `super_users`.
+
+**Request Body:**
+```json
+{
+  "email": "supervisor@example.com",
+  "password": "yourPassword123"
+}
+```
+
+**Required Fields:**
+- `email` - Super user email address
+- `password` - Account password (stored in `users` table)
+
+**Response (Success - 200):**
+```json
+{
+  "success": true,
+  "message": "Super user login successful",
+  "user": {
+    "uid": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "supervisor@example.com",
+    "display_name": "Super Admin",
+    "phone": null,
+    "location": null,
+    "bio": null,
+    "avatar": null,
+    "join_date": "2024-01-01T00:00:00.000Z",
+    "updated_at": "2024-01-01T00:00:00.000Z"
+  },
+  "supervisor": {
+    "id": 1,
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "supervisor@example.com",
+    "display_name": "Super Admin",
+    "is_active": true,
+    "navigation_permissions": { "my_events": true, "leads": { "enabled": true }, "bookings": { "enabled": true } },
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "updated_at": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+- `400` - Missing email or password, or invalid email format
+- `401` - Invalid email or password
+- `403` - User is not an active super user
+- `500` - Server error
+
+#### POST `/api/supervisor/register`
+
+Super user registration using email OTP verification. **Two-step flow:**
+
+1. **Request OTP:** `POST /api/otp` with body `{ "email": "your@email.com" }`. User receives a 6-digit OTP by email (valid 10 minutes).
+2. **Register:** `POST /api/supervisor/register` with email, OTP, password, and optional display name.
+
+If the email already exists in `users`, the account is linked and the password is updated. A new row is created in `super_users` with default full navigation permissions.
+
+**Request Body:**
+```json
+{
+  "email": "new-supervisor@example.com",
+  "otp": "123456",
+  "password": "securePassword123",
+  "display_name": "New Super Admin"
+}
+```
+
+**Required Fields:**
+- `email` - Email address (must match the email used to request OTP)
+- `otp` - 6-digit OTP received by email
+- `password` - Password (min 6 characters; stored hashed in `users`)
+
+**Optional Fields:**
+- `display_name` - Display name for the super user
+
+**Response (Success - 201):**
+```json
+{
+  "success": true,
+  "message": "Super user registered successfully. You can now log in.",
+  "uid": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "new-supervisor@example.com",
+  "display_name": "New Super Admin"
+}
+```
+
+**Error Responses:**
+- `400` - Missing email, OTP, or password; invalid/expired OTP; invalid email format; password too short
+- `409` - A super user with this email already exists
+- `500` - Server error
+
 **Navigation Permissions Structure:**
 
 The `navigation_permissions` field is a JSON object that defines which navigation items are active for the super user. Each top-level key represents a navigation section, and nested objects can define sub-items:
@@ -1673,7 +1769,113 @@ The `navigation_permissions` field is a JSON object that defines which navigatio
 One-Time Password (OTP) service for email verification. Generates a random 6-digit OTP and sends it via email.
 
 - **POST** `/api/otp` - Generate and send OTP to email
+- **GET** `
+### 15. OTP Service (`/api/otp`)
+
+One-Time Password (OTP) service for email verification. Generates a random 6-digit OTP and sends it via email.
+
+- **POST** `/api/otp` - Generate and send OTP to email
 - **GET** `/api/otp?email={email}&otp={otp}` - Verify OTP
+
+#### POST `/api/otp`
+
+Generates a random 6-digit OTP and sends it to the specified email address. The OTP is valid for 10 minutes.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response (Success - 200):**
+```json
+{
+  "success": true,
+  "message": "OTP sent successfully to your email",
+  "email": "user@example.com",
+  "expiresIn": "10 minutes",
+  "note": "Please check your email inbox for the OTP code"
+}
+```
+
+**Error Responses:**
+- `400` - Missing or invalid email format
+- `500` - SMTP configuration error or email sending failure
+
+**Security Note:** The OTP is **never** returned in the API response for security reasons. It is only sent via email to the specified address. Users must check their email inbox to retrieve the OTP code.
+
+#### GET `/api/otp`
+
+Verifies an OTP code for a given email address.
+
+**Query Parameters:**
+- `email` (required) - Email address associated with the OTP
+- `otp` (required) - The OTP code to verify
+
+**Response (Success - 200):**
+```json
+{
+  "message": "OTP verified successfully",
+  "valid": true
+}
+```
+
+**Error Responses:**
+- `400` - Missing email or OTP, invalid OTP, or expired OTP
+- `404` - OTP not found for the email address
+
+**Example Usage:**
+
+**Request OTP:**
+```bash
+curl -X POST http://localhost:3000/api/otp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+
+**Verify OTP:**
+```bash
+curl "http://localhost:3000/api/otp?email=user@example.com&otp=123456"
+```
+
+**Environment Variables Required:**
+- `SMTP_HOST` - SMTP server hostname (default: `smtp.hostinger.com`)
+- `SMTP_PORT` - SMTP server port (default: `465`)
+- `SMTP_USER` - Your email address
+- `SMTP_PASSWORD` - Your email password
+- `SMTP_FROM` - Sender email address (optional, defaults to `SMTP_USER`)
+
+---
+
+## Response Format
+
+### Success Response
+```json
+{
+  "message": "Operation successful",
+  "id": "resource_id"
+}
+```
+
+### Error Response
+```json
+{
+  "error": "Error message"
+}
+```
+
+## Status Codes
+
+- `200` - Success
+- `201` - Created
+- `400` - Bad Request (missing required fields)
+- `404` - Not Found
+- `409` - Conflict (duplicate entry)
+- `500` - Internal Server Error
+` - Verify OTP
 
 #### POST `/api/otp`
 
