@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { addCorsHeaders } from '@/lib/cors';
-import { sendTourDetailsEmail } from '@/lib/email';
+import { sendTourDetailsEmail, TourForEmail } from '@/lib/email';
+
+interface ApiTour {
+  id?: string;
+  banner?: string;
+  imageUrl?: string;
+  title?: string;
+  subdescription?: string;
+  description?: string;
+  duration?: string;
+  price?: number;
+  location?: string;
+  difficulty?: string;
+  maxGroupSize?: number;
+  category?: string;
+  subCategory?: string;
+  [key: string]: unknown;
+}
 
 function parseTourJsonFields(tour: Record<string, unknown>): Record<string, unknown> {
   const parsed = { ...tour };
@@ -19,6 +36,41 @@ function parseTourJsonFields(tour: Record<string, unknown>): Record<string, unkn
   return parsed;
 }
 
+function mapTourToForEmail(t: ApiTour): TourForEmail {
+  return {
+    title: t.title,
+    subdescription: t.subdescription,
+    description: t.description,
+    duration: t.duration,
+    price: t.price,
+    location: t.location,
+    difficulty: t.difficulty,
+    maxGroupSize: t.maxGroupSize,
+    imageUrl: t.imageUrl,
+    category: t.category,
+    subCategory: t.subCategory,
+    bannerImageUrl: t.banner || t.imageUrl || undefined,
+  };
+}
+
+/** Parse request body reliably: string → JSON.parse, object → use as-is */
+async function parseBody(request: NextRequest): Promise<{ tourIds?: string[] }> {
+  try {
+    const raw = await request.text();
+    if (!raw || !raw.trim()) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const tourIds = (parsed as { tourIds?: unknown }).tourIds;
+      return {
+        tourIds: Array.isArray(tourIds) ? tourIds.filter((id): id is string => typeof id === 'string') : undefined,
+      };
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get('origin');
   const response = new NextResponse(null, { status: 200 });
@@ -27,8 +79,9 @@ export async function OPTIONS(request: NextRequest) {
 
 /**
  * POST /api/email/tour-details
- * Sends all tour details to all users via email.
- * Optional query: ?activeOnly=true to send only active tours.
+ * Sends tour details to all users via email.
+ * Body: { "tourIds": ["id1", "id2"] } to send only selected tours; omit or empty = all tours.
+ * Optional query: ?activeOnly=true to send only active tours (when not filtering by tourIds).
  */
 export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin');
@@ -44,6 +97,9 @@ export async function POST(request: NextRequest) {
       );
       return addCorsHeaders(response, origin);
     }
+
+    const body = await parseBody(request);
+    const tourIds = body.tourIds;
 
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get('activeOnly') === 'true';
@@ -66,8 +122,13 @@ export async function POST(request: NextRequest) {
     const [tourRows] = await db.execute(tourQuery, tourParams);
     db.release();
 
-    const rawTours = tourRows as Record<string, unknown>[];
-    const tours = rawTours.map((t) => parseTourJsonFields(t));
+    const rawTours = tourRows as ApiTour[];
+    let tours = rawTours.map((t) => parseTourJsonFields(t) as ApiTour);
+
+    if (tourIds && tourIds.length > 0) {
+      const idSet = new Set(tourIds);
+      tours = tours.filter((t) => idSet.has(t.id as string));
+    }
 
     if (users.length === 0) {
       const response = NextResponse.json(
@@ -85,6 +146,8 @@ export async function POST(request: NextRequest) {
       return addCorsHeaders(response, origin);
     }
 
+    const toursForEmail: TourForEmail[] = tours.map(mapTourToForEmail);
+
     let sent = 0;
     let failed = 0;
     const errors: Array<{ email: string; error: string }> = [];
@@ -93,11 +156,7 @@ export async function POST(request: NextRequest) {
       const email = user.email?.trim();
       if (!email) continue;
       try {
-        await sendTourDetailsEmail(
-          email,
-          user.display_name ?? null,
-          tours as Parameters<typeof sendTourDetailsEmail>[2]
-        );
+        await sendTourDetailsEmail(email, user.display_name ?? null, toursForEmail);
         sent++;
       } catch (err: unknown) {
         failed++;
@@ -113,7 +172,7 @@ export async function POST(request: NextRequest) {
         sent,
         failed,
         totalUsers: users.length,
-        tourCount: tours.length,
+        tourCount: toursForEmail.length,
         ...(errors.length > 0 && { errors }),
       },
       { status: 200 }

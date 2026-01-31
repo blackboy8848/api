@@ -75,36 +75,29 @@ export async function sendOTPEmail(to: string, otp: string): Promise<boolean> {
   }
 }
 
-/**
- * Send tour details email to a user (all tours listed in HTML)
- * @param to - Recipient email address
- * @param displayName - User's display name (optional)
- * @param tours - Array of tour objects (title, description, duration, price, location, etc.)
- * @returns Promise<boolean> - true if email sent successfully
- */
-export async function sendTourDetailsEmail(
-  to: string,
-  displayName: string | null,
-  tours: Array<{
-    title?: string;
-    subdescription?: string;
-    description?: string;
-    duration?: string;
-    price?: number;
-    location?: string;
-    difficulty?: string;
-    maxGroupSize?: number;
-    imageUrl?: string;
-    category?: string;
-    subCategory?: string;
-  }>
-): Promise<boolean> {
-  const name = displayName || 'Traveler';
-  const tourRows = tours
+/** Tour shape for email content (includes optional banner image) */
+export interface TourForEmail {
+  title?: string;
+  subdescription?: string;
+  description?: string;
+  duration?: string;
+  price?: number;
+  location?: string;
+  difficulty?: string;
+  maxGroupSize?: number;
+  imageUrl?: string;
+  category?: string;
+  subCategory?: string;
+  bannerImageUrl?: string;
+}
+
+function buildTourDetailsHtml(tours: TourForEmail[]): string {
+  return tours
     .map(
       (t) => `
       <tr>
         <td style="padding: 16px; border-bottom: 1px solid #eee;">
+          ${t.bannerImageUrl ? `<img src="${escapeAttr(t.bannerImageUrl)}" alt="" style="max-width: 100%; height: auto; border-radius: 8px; display: block; margin-bottom: 12px;" />` : ''}
           <h3 style="margin: 0 0 8px 0; color: #1a1a1a;">${escapeHtml(t.title || 'Untitled Tour')}</h3>
           ${t.subdescription ? `<p style="margin: 0 0 8px 0; color: #555; font-size: 14px;">${escapeHtml(t.subdescription)}</p>` : ''}
           <p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">${escapeHtml((t.description || '').slice(0, 200))}${(t.description || '').length > 200 ? '...' : ''}</p>
@@ -119,6 +112,22 @@ export async function sendTourDetailsEmail(
     `
     )
     .join('');
+}
+
+/**
+ * Send tour details email to a user (tours listed in HTML, optional banner image per tour)
+ * @param to - Recipient email address
+ * @param displayName - User's display name (optional)
+ * @param tours - Array of tour objects (title, description, duration, price, location, bannerImageUrl, etc.)
+ * @returns Promise<boolean> - true if email sent successfully
+ */
+export async function sendTourDetailsEmail(
+  to: string,
+  displayName: string | null,
+  tours: TourForEmail[]
+): Promise<boolean> {
+  const name = displayName || 'Traveler';
+  const tourRows = buildTourDetailsHtml(tours);
 
   const emailHtml = `
     <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px;">
@@ -165,6 +174,15 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/** Escape for HTML attribute values (e.g. src) so quotes don't break the attribute */
+function escapeAttr(s: string): string {
+  return (s || '')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 /**
