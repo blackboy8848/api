@@ -76,6 +76,98 @@ export async function sendOTPEmail(to: string, otp: string): Promise<boolean> {
 }
 
 /**
+ * Send tour details email to a user (all tours listed in HTML)
+ * @param to - Recipient email address
+ * @param displayName - User's display name (optional)
+ * @param tours - Array of tour objects (title, description, duration, price, location, etc.)
+ * @returns Promise<boolean> - true if email sent successfully
+ */
+export async function sendTourDetailsEmail(
+  to: string,
+  displayName: string | null,
+  tours: Array<{
+    title?: string;
+    subdescription?: string;
+    description?: string;
+    duration?: string;
+    price?: number;
+    location?: string;
+    difficulty?: string;
+    maxGroupSize?: number;
+    imageUrl?: string;
+    category?: string;
+    subCategory?: string;
+  }>
+): Promise<boolean> {
+  const name = displayName || 'Traveler';
+  const tourRows = tours
+    .map(
+      (t) => `
+      <tr>
+        <td style="padding: 16px; border-bottom: 1px solid #eee;">
+          <h3 style="margin: 0 0 8px 0; color: #1a1a1a;">${escapeHtml(t.title || 'Untitled Tour')}</h3>
+          ${t.subdescription ? `<p style="margin: 0 0 8px 0; color: #555; font-size: 14px;">${escapeHtml(t.subdescription)}</p>` : ''}
+          <p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">${escapeHtml((t.description || '').slice(0, 200))}${(t.description || '').length > 200 ? '...' : ''}</p>
+          <p style="margin: 0; font-size: 13px; color: #333;">
+            <strong>Duration:</strong> ${escapeHtml(t.duration || '—')} &nbsp;|&nbsp;
+            <strong>Price:</strong> ₹${typeof t.price === 'number' ? t.price.toLocaleString() : (t.price ?? '—')} &nbsp;|&nbsp;
+            <strong>Location:</strong> ${escapeHtml(t.location || '—')}
+            ${t.difficulty ? ` &nbsp;|&nbsp; <strong>Difficulty:</strong> ${escapeHtml(t.difficulty)}` : ''}
+          </p>
+        </td>
+      </tr>
+    `
+    )
+    .join('');
+
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: #1a1a1a;">Hello ${escapeHtml(name)}!</h2>
+      <p style="color: #555; font-size: 16px;">Here are our current tours for you to explore:</p>
+      <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        ${tourRows}
+      </table>
+      <p style="color: #888; font-size: 14px; margin-top: 24px;">We hope to see you on the trails soon.</p>
+      <p style="color: #888; font-size: 12px;">— Mountain Mirage Backpackers</p>
+    </div>
+  `;
+
+  const text = tours
+    .map(
+      (t) =>
+        `${t.title || 'Untitled Tour'}\n${t.subdescription || ''}\n${(t.description || '').slice(0, 150)}...\nDuration: ${t.duration || '—'} | Price: ₹${t.price ?? '—'} | Location: ${t.location || '—'}\n`
+    )
+    .join('\n---\n');
+
+  try {
+    const mailOptions = {
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to,
+      subject: 'Our Tours – Mountain Mirage Backpackers',
+      html: emailHtml,
+      text: `Hello ${name}! Here are our current tours:\n\n${text}`,
+    };
+    const info = await transporter.sendMail(mailOptions);
+    if (info.rejected && info.rejected.length > 0) {
+      throw new Error(`Email rejected: ${info.rejected.join(', ')}`);
+    }
+    return true;
+  } catch (error: unknown) {
+    console.error('Error sending tour details email to', to, error);
+    throw error;
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Verify SMTP connection
  * @returns Promise<boolean> - true if connection is successful
  */
