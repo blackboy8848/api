@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   console.log("META VERIFY:", { mode, token, challenge });
 
-  if (mode === "subscribe" && token === "insta_verify_123") {
+  if (mode === "subscribe" && token === process.env.INSTAGRAM_VERIFY_TOKEN) {
     return new NextResponse(challenge, {
       status: 200,
       headers: { "Content-Type": "text/plain" },
