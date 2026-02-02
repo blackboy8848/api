@@ -34,6 +34,11 @@ export function middleware(request: NextRequest) {
   const origin = request.headers.get('origin');
   const pathname = request.nextUrl.pathname;
 
+  // Skip middleware for Instagram webhook (no auth, no redirects, no CORS)
+  if (pathname === '/api/instagram/webhook') {
+    return NextResponse.next();
+  }
+
   // Only apply CORS to API routes
   if (pathname.startsWith('/api')) {
     // Handle preflight requests
