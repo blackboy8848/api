@@ -128,6 +128,7 @@ export async function sendTourDetailsEmail(
 ): Promise<boolean> {
   const name = displayName || 'Traveler';
   const tourRows = buildTourDetailsHtml(tours);
+  const subject = buildToursSubject(tours);
 
   const emailHtml = `
     <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px;">
@@ -152,7 +153,7 @@ export async function sendTourDetailsEmail(
     const mailOptions = {
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to,
-      subject: 'Our Tours – Mountain Mirage Backpackers',
+      subject,
       html: emailHtml,
       text: `Hello ${name}! Here are our current tours:\n\n${text}`,
     };
@@ -183,6 +184,25 @@ function escapeAttr(s: string): string {
     .replace(/'/g, '&#39;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+function buildToursSubject(tours: TourForEmail[]): string {
+  const brand = 'Mountain Mirage Backpackers';
+  const count = tours.length;
+
+  const firstTitle = (tours[0]?.title || 'Tour').trim();
+  const title = truncateForSubject(firstTitle, 60);
+
+  if (count <= 1) return `Tour Details: ${title} – ${brand}`;
+
+  const more = ` +${count - 1} more`;
+  return `Our Tours: ${title}${more} – ${brand}`;
+}
+
+function truncateForSubject(s: string, maxLen: number): string {
+  if (!s) return s;
+  if (s.length <= maxLen) return s;
+  return `${s.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…`;
 }
 
 /**
