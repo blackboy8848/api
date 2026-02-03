@@ -83,6 +83,15 @@ export interface TravelHistory {
   review?: string;
 }
 
+export interface Member {
+  id: string;
+  name: string;
+  mobile_number: string;
+  booking_id?: string | null;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
 export interface PaymentMethod {
   id: string;
   user_id: string;
