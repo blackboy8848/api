@@ -92,6 +92,15 @@ export interface Member {
   updated_at?: Date;
 }
 
+export interface PickupPoint {
+  id: string;
+  location_name: string;
+  map_link: string;
+  status: 'Active' | 'Inactive';
+  created_at?: Date;
+  updated_at?: Date;
+}
+
 export interface PaymentMethod {
   id: string;
   user_id: string;
