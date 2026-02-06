@@ -273,6 +273,35 @@ export interface Coupon {
   slot_ids?: number[];
 }
 
+/** Admin inbox – received emails (contact form, booking, etc.) */
+export interface AdminEmail {
+  id: string;
+  from_email: string;
+  from_name?: string | null;
+  to_email: string;
+  subject: string;
+  body?: string | null;
+  body_html?: string | null;
+  received_at?: string | Date | null;
+  read_at?: string | Date | null;
+  replied_at?: string | Date | null;
+  reply_message_id?: string | null;
+  source?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | Date;
+  updated_at?: string | Date;
+}
+
+/** Stored sent reply for an admin email */
+export interface AdminEmailReply {
+  id: string;
+  email_id: string;
+  body?: string | null;
+  body_html?: string | null;
+  sent_at?: string | Date | null;
+  created_at?: string | Date | null;
+}
+
 // Navigation permissions structure for super users
 export interface NavigationPermissions {
   my_events?: boolean;

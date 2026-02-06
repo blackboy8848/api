@@ -219,3 +219,31 @@ export async function verifyEmailConnection(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Send a reply email (e.g. admin replying to a contact form email).
+ * @param to - Recipient email address
+ * @param subject - Subject line (e.g. "Re: ...")
+ * @param body - Plain text body
+ * @param bodyHtml - Optional HTML body
+ * @returns Promise<{ messageId: string }> - messageId from nodemailer
+ */
+export async function sendReplyEmail(
+  to: string,
+  subject: string,
+  body: string,
+  bodyHtml?: string | null
+): Promise<{ messageId: string }> {
+  const mailOptions = {
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to,
+    subject,
+    text: body,
+    html: bodyHtml || undefined,
+  };
+  const info = await transporter.sendMail(mailOptions);
+  if (info.rejected && info.rejected.length > 0) {
+    throw new Error(`Email rejected: ${info.rejected.join(', ')}`);
+  }
+  return { messageId: info.messageId || '' };
+}
