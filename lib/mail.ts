@@ -90,6 +90,18 @@ export interface InboxEmail {
   uid?: number;
 }
 
+export interface EmailDetails {
+  uid: number;
+  subject: string;
+  from: string;
+  date: string;
+  /**
+   * Raw message text (best-effort). For complex multipart emails this may include MIME.
+   * Keep this endpoint lightweight; if you need full parsing, add a dedicated parser later.
+   */
+  text: string;
+}
+
 /**
  * Read inbox via IMAP (node-imap).
  * Uses IMAP_* env vars only. Returns list of emails with subject, from, date.
@@ -208,6 +220,121 @@ export async function getInbox(limit: number = 50): Promise<InboxEmail[]> {
       // connection ended
     });
 
+    imap.connect();
+  });
+}
+
+/**
+ * Fetch a single email by UID from the INBOX.
+ * Uses IMAP_* env vars only.
+ */
+export async function getEmailByUid(uid: number): Promise<EmailDetails> {
+  const host = process.env.IMAP_HOST;
+  const user = process.env.IMAP_USER;
+  const password = process.env.IMAP_PASSWORD;
+  const port = parseInt(process.env.IMAP_PORT || '993', 10);
+
+  if (!host || !user || !password) {
+    throw new Error('Mail server is not configured (missing IMAP env vars).');
+  }
+  if (!Number.isFinite(uid) || uid <= 0) {
+    throw new Error('Invalid email id (uid).');
+  }
+
+  return await new Promise<EmailDetails>((resolve, reject) => {
+    const imap = new Imap({
+      user,
+      password,
+      host,
+      port,
+      tls: true,
+      tlsOptions: { rejectUnauthorized: true },
+    });
+
+    const safeEnd = (err: unknown) => {
+      try {
+        imap.end();
+      } catch {
+        // ignore
+      }
+      if (err) reject(err);
+    };
+
+    imap.once('ready', () => {
+      imap.openBox('INBOX', true, (openErr) => {
+        if (openErr) return safeEnd(openErr);
+
+        let from = 'Unknown';
+        let subject = '(No subject)';
+        let date = '';
+        let text = '';
+
+        // IMPORTANT: `imap.fetch()` fetches by UID; `imap.seq.fetch()` fetches by sequence number.
+        const fetcher = imap.fetch(uid, {
+          bodies: ['HEADER.FIELDS (FROM SUBJECT DATE)', 'TEXT'],
+          struct: false,
+        });
+
+        let found = false;
+
+        fetcher.on('message', (msg) => {
+          found = true;
+
+          msg.on('body', (stream, info) => {
+            let raw = '';
+            stream.on('data', (chunk) => {
+              raw += chunk.toString('utf8');
+            });
+
+            stream.once('end', () => {
+              const which = (info?.which || '').toString().toUpperCase();
+              if (which.includes('HEADER')) {
+                const lines = raw.split(/\r?\n/);
+                const headerMap: Record<string, string> = {};
+                for (const line of lines) {
+                  const idx = line.indexOf(':');
+                  if (idx === -1) continue;
+                  const k = line.slice(0, idx).trim().toLowerCase();
+                  const v = line.slice(idx + 1).trim();
+                  if (k && v) headerMap[k] = v;
+                }
+
+                from = headerMap['from'] || from;
+                subject = headerMap['subject'] || subject;
+                const dateRaw = headerMap['date'];
+                if (dateRaw) {
+                  const d = new Date(dateRaw);
+                  date = Number.isNaN(d.getTime()) ? '' : d.toISOString();
+                }
+              } else {
+                // Best-effort text extraction (may include MIME for multipart emails).
+                text += raw;
+              }
+            });
+          });
+        });
+
+        fetcher.once('error', (fetchErr) => safeEnd(fetchErr));
+        fetcher.once('end', () => {
+          if (!found) {
+            return safeEnd(new Error('Email not found'));
+          }
+          // Keep response size bounded.
+          const maxLen = 100_000;
+          const trimmed = text.length > maxLen ? text.slice(0, maxLen) : text;
+          imap.end();
+          resolve({
+            uid,
+            from,
+            subject,
+            date,
+            text: trimmed,
+          });
+        });
+      });
+    });
+
+    imap.once('error', (err) => safeEnd(err));
     imap.connect();
   });
 }
