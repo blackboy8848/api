@@ -1,10 +1,10 @@
 /**
- * Mail service utilities: send (SMTP via Nodemailer) and inbox (IMAP via ImapFlow).
+ * Mail service utilities: send (SMTP via Nodemailer) and inbox (IMAP via node-imap).
  * All credentials come from environment variables only; never exposed to frontend.
  */
 
 import nodemailer from 'nodemailer';
-import { ImapFlow } from 'imapflow';
+import Imap from 'imap';
 
 // --- SMTP (send) configuration ---
 // Port 465 = SSL; credentials from env only
@@ -91,8 +91,12 @@ export interface InboxEmail {
 }
 
 /**
- * Read inbox via IMAP (ImapFlow).
+ * Read inbox via IMAP (node-imap).
  * Uses IMAP_* env vars only. Returns list of emails with subject, from, date.
+ *
+ * Notes:
+ * - We only fetch email headers (no bodies) for performance.
+ * - This avoids Turbopack build issues caused by transitive logger deps in some IMAP libs.
  */
 export async function getInbox(limit: number = 50): Promise<InboxEmail[]> {
   const host = process.env.IMAP_HOST;
@@ -104,46 +108,106 @@ export async function getInbox(limit: number = 50): Promise<InboxEmail[]> {
     throw new Error('Mail server is not configured (missing IMAP env vars).');
   }
 
-  const client = new ImapFlow({
-    host,
-    port,
-    secure: true,
-    auth: {
+  // Wrap callback/event based node-imap API into a Promise.
+  return await new Promise<InboxEmail[]>((resolve, reject) => {
+    const imap = new Imap({
       user,
-      pass: password,
-    },
-    logger: false,
-  });
+      password,
+      host,
+      port,
+      tls: true,
+      tlsOptions: { rejectUnauthorized: true },
+    });
 
-  const emails: InboxEmail[] = [];
+    const safeEnd = (err: unknown) => {
+      try {
+        imap.end();
+      } catch {
+        // ignore
+      }
+      if (err) reject(err);
+    };
 
-  try {
-    await client.connect();
+    const emails: InboxEmail[] = [];
 
-    const mailbox = await client.mailboxOpen('INBOX');
-    const start = Math.max(1, mailbox.exists - limit + 1);
-    const end = mailbox.exists;
+    imap.once('ready', () => {
+      imap.openBox('INBOX', true, (openErr) => {
+        if (openErr) return safeEnd(openErr);
 
-    if (end < 1) {
-      return [];
-    }
+        // Get latest N messages (by sequence number).
+        imap.search(['ALL'], (searchErr, results) => {
+          if (searchErr) return safeEnd(searchErr);
 
-    for await (const msg of client.fetch(
-      { start, end },
-      { envelope: true }
-    )) {
-      const env = msg.envelope;
-      emails.push({
-        subject: env?.subject || '(No subject)',
-        from: env?.from?.[0]?.address || env?.from?.[0]?.name || 'Unknown',
-        date: env?.date ? new Date(env.date).toISOString() : '',
-        uid: msg.uid,
+          const total = results?.length || 0;
+          if (total === 0) {
+            imap.end();
+            return resolve([]);
+          }
+
+          const last = results.slice(Math.max(0, total - limit));
+          const fetcher = imap.fetch(last, {
+            bodies: 'HEADER.FIELDS (FROM SUBJECT DATE)',
+            struct: false,
+          });
+
+          fetcher.on('message', (msg) => {
+            let uid: number | undefined;
+            let from = 'Unknown';
+            let subject = '(No subject)';
+            let date = '';
+
+            msg.on('attributes', (attrs) => {
+              uid = typeof attrs?.uid === 'number' ? attrs.uid : undefined;
+            });
+
+            msg.on('body', (stream) => {
+              let raw = '';
+              stream.on('data', (chunk) => {
+                raw += chunk.toString('utf8');
+              });
+              stream.once('end', () => {
+                // Very small header parser (enough for our needs).
+                const lines = raw.split(/\r?\n/);
+                const headerMap: Record<string, string> = {};
+                for (const line of lines) {
+                  const idx = line.indexOf(':');
+                  if (idx === -1) continue;
+                  const k = line.slice(0, idx).trim().toLowerCase();
+                  const v = line.slice(idx + 1).trim();
+                  if (k && v) headerMap[k] = v;
+                }
+
+                from = headerMap['from'] || from;
+                subject = headerMap['subject'] || subject;
+                const dateRaw = headerMap['date'];
+                if (dateRaw) {
+                  const d = new Date(dateRaw);
+                  date = Number.isNaN(d.getTime()) ? '' : d.toISOString();
+                }
+              });
+            });
+
+            msg.once('end', () => {
+              emails.push({ from, subject, date, uid });
+            });
+          });
+
+          fetcher.once('error', (fetchErr) => safeEnd(fetchErr));
+          fetcher.once('end', () => {
+            // Newest first
+            emails.sort((a, b) => (b.uid || 0) - (a.uid || 0));
+            imap.end();
+            resolve(emails);
+          });
+        });
       });
-    }
+    });
 
-    // API contract: list with subject, from, date (newest first)
-    return emails.reverse();
-  } finally {
-    await client.logout();
-  }
+    imap.once('error', (err) => safeEnd(err));
+    imap.once('end', () => {
+      // connection ended
+    });
+
+    imap.connect();
+  });
 }
