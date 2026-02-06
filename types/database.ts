@@ -317,3 +317,17 @@ export interface SuperUser {
   created_at?: Date;
   updated_at?: Date;
 }
+
+/** Curated category (e.g. homepage carousel). */
+export interface CuratedCategory {
+  id?: number;
+  name: string;
+  image?: string | null;
+  tag?: string | null;
+  main_category?: string | null;
+  sub_category?: string | null;
+  sort_order?: number;
+  is_active?: number | boolean; // 1 = active, 0 = inactive
+  created_at?: Date;
+  updated_at?: Date;
+}
