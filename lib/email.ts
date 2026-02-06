@@ -222,6 +222,7 @@ export async function verifyEmailConnection(): Promise<boolean> {
 
 /**
  * Send a reply email (e.g. admin replying to a contact form email).
+ * Uses SMTP from .env (SMTP_HOST, SMTP_USER, SMTP_FROM, etc.).
  * @param to - Recipient email address
  * @param subject - Subject line (e.g. "Re: ...")
  * @param body - Plain text body
@@ -234,9 +235,48 @@ export async function sendReplyEmail(
   body: string,
   bodyHtml?: string | null
 ): Promise<{ messageId: string }> {
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
   const mailOptions = {
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    from,
     to,
+    subject,
+    text: body,
+    html: bodyHtml || undefined,
+  };
+  const info = await transporter.sendMail(mailOptions);
+  if (info.rejected && info.rejected.length > 0) {
+    throw new Error(`Email rejected: ${info.rejected.join(', ')}`);
+  }
+  return { messageId: info.messageId || '' };
+}
+
+/**
+ * Send contact form (or other inbound) email to the admin inbox via SMTP.
+ * Uses .env: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM.
+ * Admin receives at SMTP_FROM (or ADMIN_EMAIL if set).
+ * @param fromEmail - Sender email (e.g. user who filled the form)
+ * @param fromName - Sender name (optional)
+ * @param subject - Subject line
+ * @param body - Plain text body
+ * @param bodyHtml - Optional HTML body
+ * @returns Promise<{ messageId: string }>
+ */
+export async function sendContactFormToAdmin(
+  fromEmail: string,
+  fromName: string | null,
+  subject: string,
+  body: string,
+  bodyHtml?: string | null
+): Promise<{ messageId: string }> {
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const to = process.env.ADMIN_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER;
+  const replyTo = fromName?.trim()
+    ? `"${fromName.trim().replace(/"/g, '')}" <${fromEmail}>`
+    : fromEmail;
+  const mailOptions = {
+    from,
+    to,
+    replyTo,
     subject,
     text: body,
     html: bodyHtml || undefined,
