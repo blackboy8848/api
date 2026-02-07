@@ -205,6 +205,69 @@ function truncateForSubject(s: string, maxLen: number): string {
   return `${s.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…`;
 }
 
+/** Booking confirmation payload for email */
+export interface BookingConfirmationPayload {
+  bookingId: string;
+  guestCount: number;
+  dateTime: string; // e.g. "Tomorrow at 2:30 PM" or "15 Jan 2025 at 2:30 PM"
+  tourName?: string;
+  totalAmount?: number;
+}
+
+/**
+ * Send booking confirmation email after successful reservation.
+ * Matches the confirmation screen: "Your booking is confirmed!", summary, and "See all details" link.
+ */
+export async function sendBookingConfirmationEmail(
+  to: string,
+  payload: BookingConfirmationPayload
+): Promise<boolean> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || '';
+  const detailsPath = `/booking-details/${payload.bookingId}`;
+  const detailsUrl = baseUrl ? `${baseUrl.replace(/\/$/, '')}${detailsPath}` : detailsPath;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #fff;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="width: 64px; height: 64px; background: #22c55e; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
+          <span style="color: #fff; font-size: 32px; line-height: 1;">✓</span>
+        </div>
+        <h1 style="margin: 0 0 8px; font-size: 24px; color: #1a1a1a;">Your booking is confirmed!</h1>
+        <p style="margin: 0; color: #666; font-size: 15px;">Hi! We have successfully received your reservation.</p>
+      </div>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+      <div style="display: flex; justify-content: space-between; color: #555; font-size: 14px; margin-bottom: 24px;">
+        <span><strong>${payload.guestCount}</strong> guest${payload.guestCount !== 1 ? 's' : ''}</span>
+        <span>${escapeHtml(payload.dateTime)}</span>
+      </div>
+      ${payload.tourName ? `<p style="color: #555; font-size: 14px; margin-bottom: 16px;">Tour: ${escapeHtml(payload.tourName)}</p>` : ''}
+      ${payload.totalAmount != null ? `<p style="color: #555; font-size: 14px; margin-bottom: 16px;">Total: ₹${payload.totalAmount.toLocaleString()}</p>` : ''}
+      <a href="${escapeAttr(detailsUrl)}" style="display: block; text-align: center; background: #2563eb; color: #fff; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: 600;">See all details</a>
+      <p style="color: #888; font-size: 12px; margin-top: 24px;">— Mountain Mirage Backpackers</p>
+    </div>
+  `;
+
+  const text = `Your booking is confirmed!\n\nHi! We have successfully received your reservation.\n${payload.guestCount} guest(s) · ${payload.dateTime}${payload.tourName ? `\nTour: ${payload.tourName}` : ''}${payload.totalAmount != null ? `\nTotal: ₹${payload.totalAmount.toLocaleString()}` : ''}\n\nSee all details: ${detailsUrl}`;
+
+  try {
+    const mailOptions = {
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to,
+      subject: 'Booking confirmed – Mountain Mirage Backpackers',
+      html,
+      text,
+    };
+    const info = await transporter.sendMail(mailOptions);
+    if (info.rejected && info.rejected.length > 0) {
+      throw new Error(`Email rejected: ${info.rejected.join(', ')}`);
+    }
+    return true;
+  } catch (err: unknown) {
+    console.error('Error sending booking confirmation email to', to, err);
+    throw err;
+  }
+}
+
 /**
  * Verify SMTP connection
  * @returns Promise<boolean> - true if connection is successful

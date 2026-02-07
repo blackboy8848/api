@@ -965,7 +965,8 @@ Returns all slots for a specific tour, grouped by slot, with each slot containin
 Bookings are now integrated with tour slots and variants, with real-time availability checks and transaction-based booking to prevent overbooking.
 
 - **GET** `/api/bookings` - Get all bookings
-- **GET** `/api/bookings?id={id}` - Get single booking
+- **GET** `/api/bookings?id={id}` - Get single booking (query)
+- **GET** `/api/bookings/[id]` - Get single booking with full details (tour, slot, variant) — use for "See all details"
 - **GET** `/api/bookings?user_id={user_id}` - Get user's bookings
 - **GET** `/api/bookings?tour_id={tour_id}` - Get bookings for a tour
 - **GET** `/api/bookings?booking_status={status}` - Filter by booking status
@@ -987,6 +988,22 @@ Returns all bookings or filtered bookings based on query parameters. Results are
 - `booking_status` (optional) - Filter by booking status
 - `status` (optional) - Filter by status (confirmed/completed/cancelled)
 - `payment_status` (optional) - Filter by payment status
+
+**Response (Single booking by query `?id=...`):** Returns the booking object only.
+
+#### GET `/api/bookings/[id]` (booking details)
+
+Returns one booking by path ID with full details: booking fields plus related **tour**, **slot**, and **variant**. Use this for the "See all details" screen after confirmation.
+
+**Response:**
+```json
+{
+  "booking": { "id": "...", "user_id": "...", "tour_id": "...", "seats": 2, "tour_name": "...", "travel_date": "...", "total_amount": 1598, "status": "confirmed", ... },
+  "tour": { "id": "...", "title": "...", "description": "...", "duration": "...", "price": 1598, "location": "...", "imageUrl": "...", "banner": "..." },
+  "slot": { "id": 5, "slot_date": "2024-12-24", "slot_time": "14:30:00", "slot_end_date": "...", "duration_label": "..." },
+  "variant": { "id": 12, "variant_name": "...", "description": "...", "price": 1598 }
+}
+```
 
 **Response (All Bookings):**
 ```json
@@ -1059,6 +1076,8 @@ Creates a new booking with real-time availability check and transaction-based bo
   "id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+**Confirmation email:** On successful creation, a booking confirmation email is sent when a recipient is available: from `customer_email` in the body, or from the user's `email` (lookup by `user_id`). The email includes a "See all details" link to the booking details route. Email sending is non-blocking; the API still returns 201 if the mail fails.
 
 **Error Responses:**
 - `400` - Missing required fields, invalid seats (<= 0), or not enough available seats

@@ -2,6 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { Booking } from '@/types/database';
 import { randomUUID } from 'crypto';
+import { sendBookingConfirmationEmail } from '@/lib/email';
+
+function formatBookingDateTime(travelDate: string): string {
+  const d = new Date(travelDate);
+  if (Number.isNaN(d.getTime())) return '';
+  const today = new Date();
+  const isTomorrow = d.getDate() === today.getDate() + 1 && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+  const dateStr = isTomorrow ? 'Tomorrow' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const timeStr = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return `${dateStr} at ${timeStr}`;
+}
+
+function formatSlotDateTime(slotDate?: string, slotTime?: string): string {
+  if (!slotDate) return '';
+  const d = slotDate && slotTime ? new Date(`${slotDate}T${slotTime}`) : new Date(slotDate);
+  if (Number.isNaN(d.getTime())) return slotDate;
+  const today = new Date();
+  const isTomorrow = d.getDate() === today.getDate() + 1 && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+  const dateStr = isTomorrow ? 'Tomorrow' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const timeStr = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return `${dateStr} at ${timeStr}`;
+}
 
 // GET all bookings or filtered by user_id, tour_id, or status
 export async function GET(request: NextRequest) {
@@ -172,6 +194,54 @@ export async function POST(request: NextRequest) {
 
     await db.commit();
     db.release();
+
+    // Send booking confirmation email (non-blocking)
+    let recipientEmail: string | null = (customer_email && typeof customer_email === 'string' && customer_email.trim())
+      ? customer_email.trim()
+      : null;
+    if (!recipientEmail && user_id) {
+      try {
+        const conn = await pool.getConnection();
+        const [userRows] = await conn.execute(
+          'SELECT email FROM users WHERE uid = ?',
+          [user_id]
+        );
+        conn.release();
+        const users = userRows as { email?: string }[];
+        if (Array.isArray(users) && users[0]?.email) {
+          recipientEmail = users[0].email;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    let dateTimeLabel = (travel_date && typeof travel_date === 'string') ? formatBookingDateTime(travel_date) : '';
+    if (!dateTimeLabel && slot_id) {
+      try {
+        const conn = await pool.getConnection();
+        const [slotRows] = await conn.execute(
+          'SELECT slot_date, slot_time FROM tour_slots WHERE id = ?',
+          [slot_id]
+        );
+        conn.release();
+        const slots = slotRows as { slot_date?: string; slot_time?: string }[];
+        if (Array.isArray(slots) && slots[0]) {
+          dateTimeLabel = formatSlotDateTime(slots[0].slot_date, slots[0].slot_time);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!dateTimeLabel) dateTimeLabel = 'See booking details for date and time.';
+    if (recipientEmail) {
+      sendBookingConfirmationEmail(recipientEmail, {
+        bookingId,
+        guestCount: seatsValue,
+        dateTime: dateTimeLabel,
+        tourName: tour_name || undefined,
+        totalAmount: total_amount,
+      }).catch((err) => console.error('Booking confirmation email failed:', err));
+    }
 
     return NextResponse.json({ 
       message: 'Booking created successfully', 
