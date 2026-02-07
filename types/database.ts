@@ -318,6 +318,26 @@ export interface SuperUser {
   updated_at?: Date;
 }
 
+/** Global policy type for Policies Management (reusable items importable into events). */
+export type PolicyType =
+  | 'inclusions'
+  | 'exclusions'
+  | 'cancellation_policies'
+  | 'terms_and_conditions'
+  | 'faqs'
+  | 'what_to_carry'
+  | 'additional_info';
+
+export interface Policy {
+  id?: number;
+  policy_type: PolicyType;
+  title: string;
+  content?: string | null;
+  sort_order?: number;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
 /** Curated category (e.g. homepage carousel). */
 export interface CuratedCategory {
   id?: number;
