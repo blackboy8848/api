@@ -112,14 +112,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const assignedToValue = assigned_to !== undefined ? assigned_to : null;
     const assignedToStr = assignedToValue == null ? '' : String(assignedToValue).trim();
     if (assignedToStr) {
+      let recipientEmail: string | null = null;
+      let displayName: string | null = null;
       try {
+        // 1) Look up by user_id (super_users) or uid (users) – in case frontend sends id
         const [assigneeRows] = await db.execute(
           'SELECT email, display_name FROM super_users WHERE user_id = ? AND is_active = 1 LIMIT 1',
           [assignedToStr]
         );
         const assignees = assigneeRows as { email?: string; display_name?: string | null }[];
-        let recipientEmail: string | null = assignees?.[0]?.email?.trim() || null;
-        let displayName: string | null = assignees?.[0]?.display_name?.trim() || null;
+        recipientEmail = assignees?.[0]?.email?.trim() || null;
+        displayName = assignees?.[0]?.display_name?.trim() || null;
 
         if (!recipientEmail) {
           const [userRows] = await db.execute(
@@ -131,15 +134,41 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           if (displayName == null) displayName = users?.[0]?.display_name?.trim() || null;
         }
 
+        // 2) Fallback: look up by display_name (UI often sends "Yash Mhatre" instead of uid)
+        if (!recipientEmail) {
+          const [byNameSuper] = await db.execute(
+            'SELECT email, display_name FROM super_users WHERE display_name = ? AND is_active = 1 LIMIT 1',
+            [assignedToStr]
+          );
+          const byNameSuperList = byNameSuper as { email?: string; display_name?: string | null }[];
+          if (byNameSuperList?.[0]?.email) {
+            recipientEmail = byNameSuperList[0].email.trim();
+            displayName = byNameSuperList[0].display_name?.trim() || assignedToStr;
+          }
+        }
+        if (!recipientEmail) {
+          const [byNameUsers] = await db.execute(
+            'SELECT email, display_name FROM users WHERE display_name = ? LIMIT 1',
+            [assignedToStr]
+          );
+          const byNameUsersList = byNameUsers as { email?: string; display_name?: string | null }[];
+          if (byNameUsersList?.[0]?.email) {
+            recipientEmail = byNameUsersList[0].email.trim();
+            displayName = byNameUsersList[0].display_name?.trim() || assignedToStr;
+          }
+        }
+
         const [leadRows] = await db.execute('SELECT * FROM leads WHERE id = ?', [id]);
         const leadList = leadRows as Lead[];
         if (recipientEmail && Array.isArray(leadList) && leadList.length > 0) {
-          sendLeadAssignmentEmail(recipientEmail, displayName || null, leadList[0]).catch((err) =>
-            console.error('Lead assignment email failed:', err)
-          );
+          sendLeadAssignmentEmail(recipientEmail, displayName || null, leadList[0])
+            .then(() => console.log('[Lead assignment] Email sent to', recipientEmail, 'for lead', id))
+            .catch((err) => console.error('[Lead assignment] Email failed:', err));
+        } else if (!recipientEmail) {
+          console.warn('[Lead assignment] No email found for assignee:', assignedToStr, '- ensure assigned_to is user_id/uid or display_name exists in super_users/users');
         }
       } catch (e) {
-        console.error('Lead assignment email lookup/send error:', e);
+        console.error('[Lead assignment] Lookup/send error:', e);
       }
     }
 
