@@ -268,6 +268,87 @@ export async function sendBookingConfirmationEmail(
   }
 }
 
+/** Lead details for assignment email (subset of Lead) */
+export interface LeadDetailsForEmail {
+  id?: number;
+  name: string;
+  email: string;
+  phone_country_code?: string | null;
+  phone_number: string;
+  lead_source?: string | null;
+  lead_state?: string | null;
+  lead_status?: string | null;
+  enquiry_destination?: string | null;
+  tour_id?: string | null;
+  event_id?: string | null;
+  slot_id?: number | null;
+  notes?: string | null;
+  remarks?: string | null;
+  created_at?: Date | string | null;
+}
+
+/**
+ * Send lead assignment email to the assigned super user with full lead details.
+ * Called when a lead is assigned (Assigned To is set) so the assignee gets the details by email.
+ */
+export async function sendLeadAssignmentEmail(
+  to: string,
+  assigneeDisplayName: string | null,
+  lead: LeadDetailsForEmail
+): Promise<boolean> {
+  const name = assigneeDisplayName || 'Team Member';
+  const phone = [lead.phone_country_code, lead.phone_number].filter(Boolean).join(' ').trim() || lead.phone_number || '—';
+  const created = lead.created_at
+    ? (typeof lead.created_at === 'string' ? new Date(lead.created_at) : lead.created_at).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      })
+    : '—';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #fff;">
+      <h2 style="margin: 0 0 8px; font-size: 20px; color: #1a1a1a;">Lead assigned to you</h2>
+      <p style="margin: 0 0 24px; color: #555; font-size: 15px;">Hi ${escapeHtml(name)}, a lead has been assigned to you. Details below.</p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Lead ID</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(String(lead.id ?? '—'))}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Name</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(lead.name)}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Email</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(lead.email)}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Phone</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(phone)}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">State</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(lead.lead_state ?? '—')}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Status</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(lead.lead_status ?? '—')}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Source</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(lead.lead_source ?? '—')}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Enquiry</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(lead.enquiry_destination ?? '—')}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Tour / Event</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml([lead.tour_id, lead.event_id].filter(Boolean).join(' · ') || '—')}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Created</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(created)}</td></tr>
+        ${lead.notes ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Notes</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(lead.notes)}</td></tr>` : ''}
+        ${lead.remarks ? `<tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #666;">Remarks</td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${escapeHtml(lead.remarks)}</td></tr>` : ''}
+      </table>
+      <p style="color: #888; font-size: 12px; margin-top: 24px;">— Mountain Mirage Backpackers</p>
+    </div>
+  `;
+
+  const text = `Lead assigned to you\n\nHi ${name}, a lead has been assigned to you.\n\nLead ID: ${lead.id ?? '—'}\nName: ${lead.name}\nEmail: ${lead.email}\nPhone: ${phone}\nState: ${lead.lead_state ?? '—'}\nStatus: ${lead.lead_status ?? '—'}\nSource: ${lead.lead_source ?? '—'}\nEnquiry: ${lead.enquiry_destination ?? '—'}\nTour/Event: ${[lead.tour_id, lead.event_id].filter(Boolean).join(' · ') || '—'}\nCreated: ${created}${lead.notes ? `\nNotes: ${lead.notes}` : ''}${lead.remarks ? `\nRemarks: ${lead.remarks}` : ''}`;
+
+  try {
+    const mailOptions = {
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to,
+      subject: `Lead assigned: ${lead.name} – Mountain Mirage Backpackers`,
+      html,
+      text,
+    };
+    const info = await transporter.sendMail(mailOptions);
+    if (info.rejected && info.rejected.length > 0) {
+      throw new Error(`Email rejected: ${info.rejected.join(', ')}`);
+    }
+    return true;
+  } catch (err: unknown) {
+    console.error('Error sending lead assignment email to', to, err);
+    throw err;
+  }
+}
+
 /**
  * Verify SMTP connection
  * @returns Promise<boolean> - true if connection is successful

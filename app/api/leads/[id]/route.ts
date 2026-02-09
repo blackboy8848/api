@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { Lead } from '@/types/database';
 import { addCorsHeaders } from '@/lib/cors';
+import { sendLeadAssignmentEmail } from '@/lib/email';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,13 +100,50 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       `UPDATE leads SET ${setClause} WHERE id = ?`,
       [...values, id]
     );
-    db.release();
 
     const updateResult = result as { affectedRows?: number };
     if (updateResult?.affectedRows === 0) {
+      db.release();
       const res = NextResponse.json({ error: 'Lead not found' }, { status: 404 });
       return addCorsHeaders(res, origin);
     }
+
+    // If lead was assigned to someone, send that user an email with lead details
+    const assignedToValue = assigned_to !== undefined ? assigned_to : null;
+    const assignedToStr = assignedToValue == null ? '' : String(assignedToValue).trim();
+    if (assignedToStr) {
+      try {
+        const [assigneeRows] = await db.execute(
+          'SELECT email, display_name FROM super_users WHERE user_id = ? AND is_active = 1 LIMIT 1',
+          [assignedToStr]
+        );
+        const assignees = assigneeRows as { email?: string; display_name?: string | null }[];
+        let recipientEmail: string | null = assignees?.[0]?.email?.trim() || null;
+        let displayName: string | null = assignees?.[0]?.display_name?.trim() || null;
+
+        if (!recipientEmail) {
+          const [userRows] = await db.execute(
+            'SELECT email, display_name FROM users WHERE uid = ? LIMIT 1',
+            [assignedToStr]
+          );
+          const users = userRows as { email?: string; display_name?: string | null }[];
+          recipientEmail = users?.[0]?.email?.trim() || null;
+          if (displayName == null) displayName = users?.[0]?.display_name?.trim() || null;
+        }
+
+        const [leadRows] = await db.execute('SELECT * FROM leads WHERE id = ?', [id]);
+        const leadList = leadRows as Lead[];
+        if (recipientEmail && Array.isArray(leadList) && leadList.length > 0) {
+          sendLeadAssignmentEmail(recipientEmail, displayName || null, leadList[0]).catch((err) =>
+            console.error('Lead assignment email failed:', err)
+          );
+        }
+      } catch (e) {
+        console.error('Lead assignment email lookup/send error:', e);
+      }
+    }
+
+    db.release();
 
     const res = NextResponse.json({ message: 'Lead updated successfully', id });
     return addCorsHeaders(res, origin);
