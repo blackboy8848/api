@@ -345,6 +345,19 @@ export interface Policy {
   updated_at?: Date;
 }
 
+/** YouTube link for "Experience yourself" section. */
+export interface YoutubeLink {
+  id?: number;
+  url: string;
+  title: string;
+  description?: string | null;
+  thumbnail?: string | null;
+  sort_order?: number;
+  is_active?: number | boolean; // 1 = active, 0 = inactive
+  created_at?: Date;
+  updated_at?: Date;
+}
+
 /** Curated category (e.g. homepage carousel). */
 export interface CuratedCategory {
   id?: number;
