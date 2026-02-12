@@ -22,7 +22,39 @@ SMTP_FROM=your-email@mountainmiragebackpackers.in
 
 ## Base URL
 
-All API endpoints are prefixed with `/api`
+All API endpoints are prefixed with `/api`.
+
+## Table of Contents
+
+| # | Section | Endpoints |
+|---|---------|-----------|
+| 1 | [Users](#1-users-apiusers) | GET, POST, PUT, DELETE, Login |
+| 2 | [Tours](#2-tours-apitours) | GET, POST, PUT, DELETE |
+| 3 | [Tour Reviews](#3-tour-reviews-apitour-reviews) | GET, POST, PUT, DELETE |
+| 4 | [Favorites](#4-favorites-apifavorites) | GET, POST, PUT, DELETE |
+| 5 | [Travel History](#5-travel-history-apitravel-history) | GET, POST, PUT, DELETE |
+| 6 | [Payment Methods](#6-payment-methods-apipayment-methods) | GET, POST, PUT, DELETE |
+| 7 | [Tickets](#7-tickets-apitickets) | GET, POST, PUT, DELETE |
+| 8 | [Tour Slots](#8-tour-slots-apitour-slots) | GET, POST, PUT, DELETE |
+| 9 | [Tour Slot Variants](#9-tour-slot-variants-apitour-slot-variants) | GET, POST, PUT, DELETE, Availability |
+| 10 | [Tours Slots with Availability](#10-tour-slots-with-availability-apitoursidslots) | GET |
+| 11 | [Bookings](#11-bookings-apibookings) | GET, POST, PUT, PATCH, DELETE |
+| 12 | [Events](#12-events-apievents) | GET, POST, PUT, DELETE |
+| 13 | [Blog Posts](#13-blog-posts-apiblog-posts) | GET, POST, PUT, DELETE |
+| 14 | [Leads](#14-leads-apileads) | GET, POST, PUT, DELETE |
+| 15 | [Coupons](#15-coupons-apicoupons) | GET, POST, PUT, DELETE |
+| 16 | [Supervisor](#16-supervisor-apisupervisor) | GET, POST, PUT, DELETE, Login, Register |
+| 17 | [OTP](#17-otp-service-apiotp) | POST, GET (verify) |
+| 18 | [Curated Categories](#18-curated-categories-apicurated-categories) | GET, POST, PUT, DELETE |
+| 19 | [Mail / Email](#19-mail--email) | Inbox, Send, Get by ID, Tour Details |
+| 20 | [Policies](#20-policies-apipolicies) | GET, POST, PUT, DELETE |
+| 21 | [Pickup Points](#21-pickup-points-apipickup-points) | GET, POST, PUT, DELETE |
+| 22 | [Members](#22-members-apimembers) | GET, POST |
+| 23 | [Upload](#23-upload-apiupload) | POST (file to S3), GET (health) |
+| 24 | [Instagram Webhook](#24-instagram-webhook-apiinstagramwebhook) | GET (verify), POST |
+| 25 | [Newsletter Subscribe](#25-newsletter-subscribe-apisubscribe) | POST |
+
+---
 
 ## API Endpoints
 
@@ -1783,13 +1815,7 @@ The `navigation_permissions` field is a JSON object that defines which navigatio
 
 ---
 
-### 15. OTP Service (`/api/otp`)
-
-One-Time Password (OTP) service for email verification. Generates a random 6-digit OTP and sends it via email.
-
-- **POST** `/api/otp` - Generate and send OTP to email
-- **GET** `
-### 15. OTP Service (`/api/otp`)
+### 17. OTP Service (`/api/otp`)
 
 One-Time Password (OTP) service for email verification. Generates a random 6-digit OTP and sends it via email.
 
@@ -1869,36 +1895,224 @@ curl "http://localhost:3000/api/otp?email=user@example.com&otp=123456"
 
 ---
 
-## Response Format
+### 18. Curated Categories (`/api/curated-categories`)
 
-### Success Response
+Homepage carousel / curated category listings. Ordered by `sort_order` ASC, then `id` ASC.
+
+- **GET** `/api/curated-categories` - List all (optional `?active=1` or `?active=0`)
+- **GET** `/api/curated-categories/[id]` - Get one by numeric id
+- **POST** `/api/curated-categories` - Create
+- **PUT** `/api/curated-categories/[id]` - Update
+- **DELETE** `/api/curated-categories/[id]` - Delete
+
+#### GET `/api/curated-categories`
+
+**Query Parameters:** `active` (optional) — `1` or `true` = only active; `0` or `false` = only inactive. Omit for all.
+
+**Response (200):** Array of `{ id, name, image, tag, main_category, sub_category, sort_order, is_active, created_at, updated_at }`.
+
+#### GET `/api/curated-categories/[id]`
+
+**Response (200):** Single object. **400** missing id; **404** not found.
+
+#### POST `/api/curated-categories`
+
+**Request Body:** `name` (required). Optional: `image`, `tag`, `main_category`, `sub_category`, `sort_order`, `is_active`.
+
+**Response (201):** `{ "message": "Curated category created successfully", "id": 1 }`.
+
+#### PUT `/api/curated-categories/[id]`
+
+Send only fields to update. **Response (200):** `{ "message": "Curated category updated successfully", "id": "1" }`.
+
+#### DELETE `/api/curated-categories/[id]`
+
+**Response (200):** `{ "message": "Curated category deleted successfully" }`.
+
+---
+
+### 19. Mail / Email
+
+Canonical routes are under `/api/mail`. `/api/email/*` mirrors them for backward compatibility.
+
+| Method | Canonical | Alias | Description |
+|--------|-----------|-------|-------------|
+| GET | `/api/mail/inbox` | `/api/email/inbox` | List INBOX emails (IMAP) |
+| POST | `/api/mail/send` | `/api/email/send` | Send email (SMTP) |
+| GET | `/api/mail/[id]` | `/api/email/[id]` | Get single email by UID |
+| POST | — | `/api/email/tour-details` | Send tour details to all users |
+
+#### GET `/api/mail/inbox` (or `/api/email/inbox`)
+
+**Query Parameters:** `limit` (optional) — Max emails to return (1–100, default 50).
+
+**Response (200):** `{ "emails": [ ... ] }` — each item has subject, from, date, etc. **502** on IMAP error.
+
+#### POST `/api/mail/send` (or `/api/email/send`)
+
+**Request Body:**
 ```json
 {
-  "message": "Operation successful",
-  "id": "resource_id"
+  "to": "recipient@example.com",
+  "subject": "Subject line",
+  "message": "Body text"
 }
 ```
+`to` is required; `subject` and `message` default to empty string.
 
-### Error Response
-```json
-{
-  "error": "Error message"
-}
-```
+**Response (200):** `{ "success": true, "messageId": "..." }`. **400** missing/invalid `to`; **502** send failure.
 
-## Status Codes
+#### GET `/api/mail/[id]` (or `/api/email/[id]`)
 
-- `200` - Success
-- `201` - Created
-- `400` - Bad Request (missing required fields)
-- `404` - Not Found
-- `409` - Conflict (duplicate entry)
-- `500` - Internal Server Error
-` - Verify OTP
+**Path:** `id` = numeric email UID.
 
-#### POST `/api/otp`
+**Response (200):** `{ "email": { ... } }`. **400** invalid id; **404** not found; **502** on error.
 
-Generates a random 6-digit OTP and sends it to the specified email address. The OTP is valid for 10 minutes.
+#### POST `/api/email/tour-details`
+
+Sends tour details to all users with an email. Uses SMTP; requires `SMTP_USER` and `SMTP_PASSWORD`.
+
+**Request Body:** `{ "tourIds": ["id1", "id2"] }` — optional. Omit or empty = all tours.
+
+**Query:** `?activeOnly=true` — when not filtering by `tourIds`, only active tours are included.
+
+**Response (200):** `{ "success": true|false, "message": "...", "sent", "failed", "totalUsers", "tourCount", "errors"?: [...] }`. **400** no tours found; **500** email not configured.
+
+---
+
+### 20. Policies (`/api/policies`)
+
+Global policy content (inclusions, exclusions, cancellation, terms, FAQs, what to carry, additional info).
+
+- **GET** `/api/policies` - List policies (optional `?policy_type=...`, `?sort=newest|oldest`)
+- **GET** `/api/policies/[id]` - Get one by id
+- **POST** `/api/policies` - Create
+- **PUT** `/api/policies/[id]` - Update
+- **DELETE** `/api/policies/[id]` - Delete
+
+**Valid `policy_type` values:** `inclusions`, `exclusions`, `cancellation_policies`, `terms_and_conditions`, `faqs`, `what_to_carry`, `additional_info`.
+
+#### GET `/api/policies`
+
+**Query:** `policy_type` (optional), `sort` (optional, default `newest`). Order: `policy_type`, `sort_order`, then by `created_at`.
+
+**Response (200):** Array of `{ id, policy_type, title, content, sort_order, created_at, updated_at }`.
+
+#### GET `/api/policies/[id]`
+
+**Response (200):** Single policy object. **400** missing id; **404** not found.
+
+#### POST `/api/policies`
+
+**Request Body:** `policy_type` (required), `title` (required). Optional: `content`, `sort_order` (default 0).
+
+**Response (201):** `{ "message": "Policy created successfully", "id": 1 }`. **400** invalid `policy_type` or missing fields.
+
+#### PUT `/api/policies/[id]`
+
+Send only fields to update (`policy_type`, `title`, `content`, `sort_order`). **Response (200):** `{ "message": "Policy updated successfully", "id": "..." }`.
+
+#### DELETE `/api/policies/[id]`
+
+**Response (200):** `{ "message": "Policy deleted successfully" }`.
+
+---
+
+### 21. Pickup Points (`/api/pickup-points`)
+
+Pickup location management (name, map link, status).
+
+- **GET** `/api/pickup-points` - List all or single by `?id=...`; optional `?status=Active|Inactive`
+- **POST** `/api/pickup-points` - Create
+- **PUT** `/api/pickup-points` - Update (requires `id` in body)
+- **DELETE** `/api/pickup-points?id=...` - Delete
+
+#### POST `/api/pickup-points`
+
+**Request Body:** `location_name` (required), `map_link` (required). Optional: `id` (UUID), `status` — `Active` (default) or `Inactive`.
+
+**Response (201):** `{ "message": "Pickup point created successfully", "id": "uuid" }`.
+
+#### PUT `/api/pickup-points`
+
+**Request Body:** `id` (required). Optional: `location_name`, `map_link`, `status`.
+
+**Response (200):** `{ "message": "Pickup point updated successfully", "id": "..." }`. **404** not found.
+
+#### DELETE `/api/pickup-points`
+
+**Query:** `id` (required). **Response (200):** `{ "message": "Pickup point deleted successfully" }`. **404** not found.
+
+---
+
+### 22. Members (`/api/members`)
+
+Members (e.g. trip participants); can be linked to a booking.
+
+- **GET** `/api/members` - List all or single by `?id=...`; optional `?booking_id=...`
+- **POST** `/api/members` - Create
+
+#### GET `/api/members`
+
+**Query:** `id` (optional), `booking_id` (optional). Order: `created_at` DESC.
+
+**Response (200):** Array or single `{ id, name, mobile_number, booking_id, created_at, updated_at }`. **404** when `id` provided and not found.
+
+#### POST `/api/members`
+
+**Request Body:** `name` (required), `mobile_number` (required). Optional: `id` (UUID), `booking_id`.
+
+**Response (201):** `{ "message": "Member created successfully", "id": "uuid" }`.
+
+---
+
+### 23. Upload (`/api/upload`)
+
+Upload files (images) to S3. Requires AWS credentials in environment.
+
+- **GET** `/api/upload` - Health / capability info
+- **POST** `/api/upload` - Upload file (multipart form: `file`, optional `folder`)
+
+#### GET `/api/upload`
+
+**Response (200):** `{ "message": "Upload endpoint is ready", "maxFileSize": "10MB", "allowedTypes": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"] }`.
+
+#### POST `/api/upload`
+
+**Request:** `multipart/form-data` with field `file` (required); optional `folder` (string) for S3 prefix.
+
+**Constraints:** Max size 10MB. Allowed types: image/jpeg, image/jpg, image/png, image/gif, image/webp.
+
+**Response (200):** `{ "success": true, "url", "key", "fileName", "size", "type" }`. **400** no file, size exceeded, or invalid type; **500** upload failure.
+
+---
+
+### 24. Instagram Webhook (`/api/instagram/webhook`)
+
+Meta/Instagram webhook for app subscription verification and incoming events.
+
+- **GET** `/api/instagram/webhook` - Verification (Meta sends `hub.mode`, `hub.verify_token`, `hub.challenge`)
+- **POST** `/api/instagram/webhook` - Incoming webhook payloads (returns `{ "status": "ok" }`)
+
+#### GET `/api/instagram/webhook`
+
+**Query (from Meta):** `hub.mode=subscribe`, `hub.verify_token=<your token>`, `hub.challenge=<challenge string>`.
+
+Verification succeeds when `hub.mode === "subscribe"` and `hub.verify_token` matches `INSTAGRAM_VERIFY_TOKEN` in environment. Response is the raw `hub.challenge` string (text/plain), status 200. Otherwise **403** Forbidden.
+
+#### POST `/api/instagram/webhook`
+
+Accepts Meta webhook payloads. **Response (200):** `{ "status": "ok" }`. Implement payload handling as needed (e.g. comments, mentions).
+
+---
+
+### 25. Newsletter Subscribe (`/api/subscribe`)
+
+Newsletter signup for “Stay Updated with New Adventures”. Saves the email to `newsletter_subscribers` and sends a thank-you email to the subscriber.
+
+- **POST** `/api/subscribe` - Subscribe an email (body: `{ "email": "user@example.com" }`)
+
+#### POST `/api/subscribe`
 
 **Request Body:**
 ```json
@@ -1907,65 +2121,13 @@ Generates a random 6-digit OTP and sends it to the specified email address. The 
 }
 ```
 
-**Response (Success - 200):**
-```json
-{
-  "success": true,
-  "message": "OTP sent successfully to your email",
-  "email": "user@example.com",
-  "expiresIn": "10 minutes",
-  "note": "Please check your email inbox for the OTP code"
-}
-```
+- **Required:** `email` — valid email address.
+- **Response (201):** `{ "message": "Thank you for subscribing! Check your inbox for a confirmation.", "subscribed": true }`
+- If the email is already in the list, the API still returns **201** with a message that they were already subscribed, and sends a thank-you email again.
+- **400** — Missing or invalid email.
+- **500** — Database or mail server error.
 
-**Error Responses:**
-- `400` - Missing or invalid email format
-- `500` - SMTP configuration error or email sending failure
-
-**Security Note:** The OTP is **never** returned in the API response for security reasons. It is only sent via email to the specified address. Users must check their email inbox to retrieve the OTP code.
-
-#### GET `/api/otp`
-
-Verifies an OTP code for a given email address.
-
-**Query Parameters:**
-- `email` (required) - Email address associated with the OTP
-- `otp` (required) - The OTP code to verify
-
-**Response (Success - 200):**
-```json
-{
-  "message": "OTP verified successfully",
-  "valid": true
-}
-```
-
-**Error Responses:**
-- `400` - Missing email or OTP, invalid OTP, or expired OTP
-- `404` - OTP not found for the email address
-
-**Example Usage:**
-
-**Request OTP:**
-```bash
-curl -X POST http://localhost:3000/api/otp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com"
-  }'
-```
-
-**Verify OTP:**
-```bash
-curl "http://localhost:3000/api/otp?email=user@example.com&otp=123456"
-```
-
-**Environment Variables Required:**
-- `SMTP_HOST` - SMTP server hostname (default: `smtp.hostinger.com`)
-- `SMTP_PORT` - SMTP server port (default: `465`)
-- `SMTP_USER` - Your email address
-- `SMTP_PASSWORD` - Your email password
-- `SMTP_FROM` - Sender email address (optional, defaults to `SMTP_USER`)
+**Database:** Run the migration `migration_newsletter_subscribers.sql` to create the `newsletter_subscribers` table before using this endpoint. **Thank-you email:** Sent via SMTP (same as `/api/mail/send`); ensure `SMTP_*` env vars are set (see [MAIL_SETUP.md](./MAIL_SETUP.md)).
 
 ---
 

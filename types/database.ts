@@ -244,6 +244,13 @@ export interface Lead {
   updated_at?: Date;
 }
 
+export interface NewsletterSubscriber {
+  id?: number;
+  email: string;
+  subscribed?: number; // 1 = subscribed, 0 = unsubscribed
+  created_at?: Date;
+}
+
 // Coupon level: company, event, batch
 export type CouponLevel = 'company' | 'event' | 'batch';
 export type CouponDiscountType = 'percentage' | 'fixed';
