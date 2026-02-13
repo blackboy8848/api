@@ -1,9 +1,10 @@
 /**
- * POST /api/bookings/refund
- * Request or process a refund. Inserts refund row + transaction (ledger) + audit. Never deletes bookings.
+ * GET /api/bookings/refund - List refunds (optionally by booking_id).
+ * POST /api/bookings/refund - Request or process a refund. Inserts refund + transaction + audit.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
 import { runWithTransaction, insertAuditLog } from '@/lib/db-helpers';
 import type { RefundStatus } from '@/types/database';
 import { randomUUID } from 'crypto';
@@ -17,6 +18,33 @@ interface RefundBody {
   reason?: string | null;
   status?: RefundStatus;
   performed_by?: string | null;
+}
+
+/** GET - Show refunds. Query: ?booking_id=xxx to filter by booking. */
+export async function GET(request: NextRequest) {
+  let conn: Awaited<ReturnType<typeof pool.getConnection>> | null = null;
+  try {
+    const { searchParams } = new URL(request.url);
+    const booking_id = searchParams.get('booking_id');
+
+    conn = await pool.getConnection();
+    let query = 'SELECT id, booking_id, amount, reason, status, created_at FROM refunds WHERE 1=1';
+    const params: string[] = [];
+    if (booking_id) {
+      query += ' AND booking_id = ?';
+      params.push(booking_id);
+    }
+    query += ' ORDER BY created_at DESC';
+
+    const [rows] = await conn.execute(query, params.length ? params : undefined);
+    conn.release();
+    conn = null;
+    return NextResponse.json(rows);
+  } catch (err: unknown) {
+    if (conn) conn.release();
+    const message = err instanceof Error ? err.message : 'Server error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {

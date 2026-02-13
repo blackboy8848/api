@@ -1,15 +1,45 @@
 /**
- * POST /api/bookings/cancel
- * Cancel a booking (soft). Sets booking_status = CANCELLED. Never deletes the row.
+ * GET /api/bookings/cancel - List cancelled bookings (booking_status = CANCELLED).
+ * POST /api/bookings/cancel - Cancel a booking (soft). Sets booking_status = CANCELLED.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
 import { runWithTransaction, insertAuditLog } from '@/lib/db-helpers';
 import type { Connection } from 'mysql2/promise';
 
 interface CancelBody {
   booking_id: string;
   performed_by?: string | null;
+}
+
+/** GET - Show cancelled bookings. Query: ?user_id=xxx to filter by user. */
+export async function GET(request: NextRequest) {
+  let conn: Awaited<ReturnType<typeof pool.getConnection>> | null = null;
+  try {
+    const { searchParams } = new URL(request.url);
+    const user_id = searchParams.get('user_id');
+
+    conn = await pool.getConnection();
+    let query = `SELECT id, user_id, tour_id, slot_id, variant_id, seats, tour_name, travel_date, total_amount,
+                 booking_status, payment_status, created_at, updated_at
+                 FROM bookings WHERE (booking_status = 'CANCELLED' OR status = 'cancelled') AND (is_deleted = 0 OR is_deleted IS NULL)`;
+    const params: string[] = [];
+    if (user_id) {
+      query += ' AND user_id = ?';
+      params.push(user_id);
+    }
+    query += ' ORDER BY updated_at DESC, created_at DESC';
+
+    const [rows] = await conn.execute(query, params.length ? params : undefined);
+    conn.release();
+    conn = null;
+    return NextResponse.json(rows);
+  } catch (err: unknown) {
+    if (conn) conn.release();
+    const message = err instanceof Error ? err.message : 'Server error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {

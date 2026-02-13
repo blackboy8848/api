@@ -1,10 +1,10 @@
 /**
- * POST /api/bookings/adjustment
- * Record an adjustment. Inserts new transaction (ADJUSTMENT) and optionally a new settlement row.
- * Never updates existing settlement rows.
+ * GET /api/bookings/adjustment - List adjustment transactions (and optionally settlements).
+ * POST /api/bookings/adjustment - Record an adjustment. Inserts transaction + optional settlement.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
 import { runWithTransaction, insertAuditLog } from '@/lib/db-helpers';
 import type { PaymentMethodEnum } from '@/types/database';
 import { randomUUID } from 'crypto';
@@ -28,6 +28,33 @@ interface AdjustmentBody {
   /** Optional: create a new settlement record (never update existing). */
   settlement?: SettlementInput;
   performed_by?: string | null;
+}
+
+/** GET - Show adjustment transactions. Query: ?booking_id=xxx to filter by booking. */
+export async function GET(request: NextRequest) {
+  let conn: Awaited<ReturnType<typeof pool.getConnection>> | null = null;
+  try {
+    const { searchParams } = new URL(request.url);
+    const booking_id = searchParams.get('booking_id');
+
+    conn = await pool.getConnection();
+    let query = "SELECT id, booking_id, transaction_type, payment_method, amount, status, created_at FROM transactions WHERE transaction_type = 'ADJUSTMENT'";
+    const params: string[] = [];
+    if (booking_id) {
+      query += ' AND booking_id = ?';
+      params.push(booking_id);
+    }
+    query += ' ORDER BY created_at DESC';
+
+    const [rows] = await conn.execute(query, params.length ? params : undefined);
+    conn.release();
+    conn = null;
+    return NextResponse.json(rows);
+  } catch (err: unknown) {
+    if (conn) conn.release();
+    const message = err instanceof Error ? err.message : 'Server error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
