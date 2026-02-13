@@ -1,0 +1,33 @@
+-- =============================================================================
+-- REFERENCE: Full enterprise bookings schema (for new databases only).
+-- If you already have a bookings table, use migration_enterprise_bookings.sql
+-- instead to ALTER existing tables and CREATE new ones.
+-- =============================================================================
+
+-- Example structure for bookings (match your existing columns and add ENUMs).
+-- Adjust column list if your current table has different columns (e.g. slot_id INT).
+
+-- CREATE TABLE bookings (
+--   id VARCHAR(36) PRIMARY KEY,
+--   user_id VARCHAR(36) NOT NULL,
+--   tour_id VARCHAR(36) NOT NULL,
+--   slot_id INT,
+--   variant_id INT,
+--   seats INT NOT NULL,
+--   tour_name VARCHAR(255),
+--   travel_date DATE,
+--   total_amount DECIMAL(12,2) DEFAULT 0,
+--   status VARCHAR(50),
+--   booking_status ENUM('PENDING','CONFIRMED','CANCELLED') NOT NULL DEFAULT 'PENDING',
+--   payment_status ENUM('UNPAID','PAID','PARTIALLY_PAID','REFUND_INITIATED','REFUNDED') NOT NULL DEFAULT 'UNPAID',
+--   settlement_status ENUM('NOT_SETTLED','PENDING','SETTLED') NOT NULL DEFAULT 'NOT_SETTLED',
+--   is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+--   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+--   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--   INDEX idx_bookings_is_deleted (is_deleted),
+--   INDEX idx_bookings_booking_status (booking_status),
+--   INDEX idx_bookings_payment_status (payment_status)
+-- );
+
+-- Then create: transactions, settlements, refunds, audit_logs
+-- (same as in migration_enterprise_bookings.sql).

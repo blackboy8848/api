@@ -145,6 +145,18 @@ export interface TourSlotVariant {
   created_at?: Date;
 }
 
+// ----- Enterprise booking ENUMs (match MySQL ENUMs) -----
+export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+export type PaymentStatus = 'UNPAID' | 'PAID' | 'PARTIALLY_PAID' | 'REFUND_INITIATED' | 'REFUNDED';
+export type SettlementStatus = 'NOT_SETTLED' | 'PENDING' | 'SETTLED';
+export type TransactionType = 'PAYMENT' | 'REFUND' | 'ADJUSTMENT';
+export type PaymentMethodEnum = 'ONLINE' | 'MANUAL' | 'UPI' | 'CARD' | 'BANK_TRANSFER';
+export type TransactionStatus = 'PENDING' | 'SUCCESS' | 'FAILED';
+export type RefundStatus = 'REQUESTED' | 'APPROVED' | 'PROCESSED' | 'REJECTED';
+export type SettlementRecordStatus = 'PENDING' | 'PROCESSED';
+export type AuditEntityType = 'BOOKING' | 'TRANSACTION' | 'REFUND' | 'SETTLEMENT';
+export type AuditActionType = 'CREATE' | 'UPDATE' | 'CANCEL' | 'REFUND' | 'ADJUSTMENT';
+
 export interface Booking {
   id: string;
   user_id: string;
@@ -152,24 +164,74 @@ export interface Booking {
   slot_id?: number;
   variant_id?: number;
   seats?: number;
-  tour_name: string;
-  customer_name: string;
-  customer_email: string;
-  phone_number: string;
+  tour_name?: string;
+  customer_name?: string;
+  customer_email?: string;
+  phone_number?: string;
   number_of_seats?: number;
   payment_type?: 'Advance' | 'Full';
   payment_proof?: string;
-  payment_status?: 'Verified' | 'Not Verified';
-  booking_status?: 'Pending' | 'Confirmed' | 'Rejected' | 'cancelled' | 'completed';
+  /** Enterprise: strict ENUM - use PaymentStatus type */
+  payment_status?: PaymentStatus;
+  /** Enterprise: strict ENUM - use BookingStatus type. Never DELETE; use is_deleted for soft delete. */
+  booking_status?: BookingStatus;
+  settlement_status?: SettlementStatus;
+  is_deleted?: boolean;
   booking_date?: Date;
-  travel_date: Date;
+  travel_date?: Date | string;
   total_amount?: number;
   payment_method_id?: string;
   ticket_id?: string;
   notes?: string;
   created_at?: Date;
   updated_at?: Date;
-  status?: 'Pending' | 'Confirmed' | 'Rejected' | 'cancelled' | 'completed'; // Alternative field name
+  /** Legacy alias – prefer booking_status */
+  status?: string;
+}
+
+/** Financial ledger – append only. Never UPDATE or DELETE. */
+export interface Transaction {
+  id: string;
+  booking_id: string;
+  transaction_type: TransactionType;
+  payment_method: PaymentMethodEnum;
+  amount: number;
+  status: TransactionStatus;
+  created_at?: Date;
+}
+
+/** Immutable. Never UPDATE. For adjustments, insert a new row. */
+export interface Settlement {
+  id: string;
+  booking_id: string;
+  gross_amount: number;
+  vendor_cost: number;
+  commission: number;
+  processing_fee: number;
+  deduction: number;
+  net_amount: number;
+  status: SettlementRecordStatus;
+  created_at?: Date;
+}
+
+export interface Refund {
+  id: string;
+  booking_id: string;
+  amount: number;
+  reason?: string | null;
+  status: RefundStatus;
+  created_at?: Date;
+}
+
+export interface AuditLog {
+  id: string;
+  entity_type: AuditEntityType | string;
+  entity_id: string;
+  action_type: AuditActionType | string;
+  old_data?: Record<string, unknown> | null;
+  new_data?: Record<string, unknown> | null;
+  performed_by?: string | null;
+  created_at?: Date;
 }
 
 export interface Event {

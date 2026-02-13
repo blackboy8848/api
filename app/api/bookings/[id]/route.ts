@@ -44,7 +44,7 @@ export async function GET(
       LEFT JOIN tours t ON t.id = b.tour_id
       LEFT JOIN tour_slots s ON s.id = b.slot_id
       LEFT JOIN tour_slot_variants v ON v.id = b.variant_id
-      WHERE b.id = ?`,
+      WHERE b.id = ? AND (b.is_deleted = 0 OR b.is_deleted IS NULL)`,
       [id]
     );
     db.release();
@@ -66,7 +66,12 @@ export async function GET(
       travel_date: row.travel_date,
       total_amount: row.total_amount,
       status: row.status,
+      booking_status: row.booking_status,
+      payment_status: row.payment_status,
+      settlement_status: row.settlement_status,
+      is_deleted: row.is_deleted,
       created_at: row.created_at,
+      updated_at: row.updated_at,
     };
 
     const details = {
