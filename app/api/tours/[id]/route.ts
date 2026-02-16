@@ -108,6 +108,10 @@ export async function PUT(
       if (['images', 'startDates', 'included', 'notIncluded', 'schedule'].includes(field) && value) {
         return JSON.stringify(value);
       }
+      // itinerary_pdf_url: allow null/empty to clear
+      if (field === 'itinerary_pdf_url') {
+        return value != null && String(value).trim() !== '' ? String(value).trim() : null;
+      }
       return value;
     });
 

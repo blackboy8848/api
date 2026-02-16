@@ -43,6 +43,8 @@ export interface Tour {
   subCategory: string;
   isWeekendTrip?: boolean;
   schedule?: any;
+  /** Optional URL/path to uploaded PDF itinerary */
+  itinerary_pdf_url?: string | null;
   isActive?: boolean;
   created_at?: Date;
   updated_at?: Date;

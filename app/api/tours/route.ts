@@ -91,12 +91,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const itineraryPdfUrl = body.itinerary_pdf_url != null && String(body.itinerary_pdf_url).trim() !== ''
+      ? String(body.itinerary_pdf_url).trim()
+      : null;
+
     const db = await pool.getConnection();
     const [result] = await db.execute(
       `INSERT INTO tours (id, title, subdescription, description, duration, price, difficulty, imageUrl, images, 
         location, lat, lng, maxGroupSize, startDates, included, notIncluded, category, subCategory, 
-        isWeekendTrip, schedule, isActive) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        isWeekendTrip, schedule, itinerary_pdf_url, isActive) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id, title, body.subdescription || null, description, duration,
         price || 0, difficulty || 'Moderate', imageUrl, body.images ? JSON.stringify(body.images) : null,
@@ -106,6 +110,7 @@ export async function POST(request: NextRequest) {
         body.notIncluded ? JSON.stringify(body.notIncluded) : null,
         category, subCategory, body.isWeekendTrip || false,
         body.schedule ? JSON.stringify(body.schedule) : null,
+        itineraryPdfUrl,
         isActive !== undefined ? isActive : true
       ]
     );
@@ -148,6 +153,10 @@ export async function PUT(request: NextRequest) {
       // Stringify JSON fields
       if (['images', 'startDates', 'included', 'notIncluded', 'schedule'].includes(field) && value) {
         return JSON.stringify(value);
+      }
+      // itinerary_pdf_url: allow null/empty to clear
+      if (field === 'itinerary_pdf_url') {
+        return value != null && String(value).trim() !== '' ? String(value).trim() : null;
       }
       return value;
     });
