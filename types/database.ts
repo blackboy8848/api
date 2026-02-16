@@ -433,3 +433,23 @@ export interface CuratedCategory {
   created_at?: Date;
   updated_at?: Date;
 }
+
+/** Category (parent for subcategories). */
+export interface Category {
+  id?: number;
+  name: string;
+  is_active?: number | boolean;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+/** Subcategory (belongs to a category). */
+export interface Subcategory {
+  id?: number;
+  category_id: number;
+  name: string;
+  image_url?: string | null;
+  is_active?: number | boolean;
+  created_at?: Date;
+  updated_at?: Date;
+}
