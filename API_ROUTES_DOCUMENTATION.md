@@ -26,6 +26,7 @@ Quick reference for API routes on this backend (e.g. `api-topaz-psi-42.vercel.ap
 | GET/POST/PUT/DELETE | `/api/pickup-points` | Pickup points |
 | GET/POST | `/api/members` | Members (trip participants) |
 | GET/POST | `/api/upload` | Upload images to S3 |
+| GET/POST | `/api/tours/[id]/itinerary-pdf` | Upload tour itinerary PDF to S3 (updates `itinerary_pdf_url`) |
 | GET/POST | `/api/instagram/webhook` | Instagram/Meta webhook |
 
 For request/response bodies, query params, and error codes, see [API_DOCUMENTATION.md](./API_DOCUMENTATION.md).
